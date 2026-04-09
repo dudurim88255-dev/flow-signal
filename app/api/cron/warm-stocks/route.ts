@@ -9,6 +9,15 @@ export async function GET(req: Request) {
   }
 
   const baseUrl = new URL(req.url).origin;
+
+  // 리스트 API 먼저 워밍 (메인 페이지 속도)
+  await Promise.allSettled([
+    fetch(`${baseUrl}/api/kospi`),
+    fetch(`${baseUrl}/api/us`),
+    fetch(`${baseUrl}/api/crypto`),
+  ]);
+
+  // 개별 종목 상세 워밍
   const symbols = [
     ...KOSPI_STOCKS.map((s) => s.symbol),
     ...US_STOCKS.map((s) => s.symbol),
@@ -17,10 +26,7 @@ export async function GET(req: Request) {
 
   const results = await Promise.allSettled(
     symbols.map((sym) =>
-      fetch(`${baseUrl}/api/stock/${encodeURIComponent(sym)}`, {
-        // 캐시 우회 — 항상 최신 데이터로 갱신
-        headers: { "Cache-Control": "no-cache" },
-      })
+      fetch(`${baseUrl}/api/stock/${encodeURIComponent(sym)}`)
     )
   );
 

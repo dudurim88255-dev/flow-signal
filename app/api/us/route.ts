@@ -80,7 +80,7 @@ export async function GET() {
   console.info(`[api/us] 조회 완료: ${stocks.length}/${US_STOCKS.length}개`);
 
   try {
-    await getRedis().set(CACHE_KEY, stocks, { ex: 300 });
+    await getRedis().set(CACHE_KEY, stocks, { ex: 1800 });
   } catch (e) {
     console.warn("[api/us] Redis 캐시 저장 실패:", e instanceof Error ? e.message : e);
   }

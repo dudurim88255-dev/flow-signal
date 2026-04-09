@@ -143,7 +143,7 @@ export async function GET() {
     console.info(`[api/crypto] 조회 완료: ${sorted.length}개`);
 
     try {
-      await getRedis().set(CACHE_KEY, sorted, { ex: 300 });
+      await getRedis().set(CACHE_KEY, sorted, { ex: 1800 });
     } catch (e) {
       console.warn("[api/crypto] Redis 캐시 저장 실패:", e instanceof Error ? e.message : e);
     }
