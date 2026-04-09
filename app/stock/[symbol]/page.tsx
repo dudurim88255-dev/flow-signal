@@ -259,9 +259,45 @@ export default function StockDetailPage() {
 
   // 로딩 스켈레톤
   if (loading) {
+    const Bone = ({ w, h, mb = 8 }: { w: string; h: number; mb?: number }) => (
+      <div style={{
+        width: w, height: h, borderRadius: 6, marginBottom: mb,
+        background: `linear-gradient(90deg, ${T.bd} 25%, ${T.sfEl} 50%, ${T.bd} 75%)`,
+        backgroundSize: "200% 100%",
+        animation: "shimmer 1.4s infinite",
+      }} />
+    );
     return (
-      <div style={{ minHeight: "100vh", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ fontFamily: MO, fontSize: 14, color: T.tx2 }}>데이터 불러오는 중…</div>
+      <div style={{ minHeight: "100vh", background: T.bg, color: T.tx }}>
+        <div style={{ maxWidth: 760, margin: "0 auto", padding: "20px 16px 60px" }}>
+          {/* 뒤로가기 */}
+          <div style={{ height: 20, marginBottom: 20 }} />
+          {/* 헤더 카드 */}
+          <div style={{ background: T.sf, border: `1px solid ${T.bd}`, borderRadius: 16, padding: "20px 24px", marginBottom: 16 }}>
+            <Bone w="40%" h={14} mb={10} />
+            <Bone w="25%" h={28} mb={8} />
+            <Bone w="15%" h={12} />
+          </div>
+          {/* 차트 */}
+          <div style={{ background: T.sf, border: `1px solid ${T.bd}`, borderRadius: 16, padding: "16px 12px", marginBottom: 16, height: 180 }}>
+            <Bone w="20%" h={11} mb={12} />
+            <Bone w="100%" h={120} />
+          </div>
+          {/* 중간 그리드 */}
+          <div className="detail-mid-grid">
+            {[0, 1].map(i => (
+              <div key={i} style={{ background: T.sf, border: `1px solid ${T.bd}`, borderRadius: 16, padding: "16px 20px" }}>
+                <Bone w="40%" h={11} mb={16} />
+                {[90, 75, 60, 80].map((w, j) => <Bone key={j} w={`${w}%`} h={8} mb={14} />)}
+              </div>
+            ))}
+          </div>
+          {/* AI 코멘트 */}
+          <div style={{ background: T.sf, border: `1px solid ${T.bd}`, borderRadius: 16, padding: "16px 20px", marginBottom: 16 }}>
+            <Bone w="30%" h={11} mb={14} />
+            {[100, 90, 95, 60].map((w, i) => <Bone key={i} w={`${w}%`} h={11} mb={9} />)}
+          </div>
+        </div>
       </div>
     );
   }

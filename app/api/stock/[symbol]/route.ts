@@ -215,7 +215,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ symbol:
   const start = Date.now();
 
   async function saveCache(data: DetailData) {
-    try { await getRedis().set(CACHE_KEY, data, { ex: 300 }); } catch { /* Redis 없으면 무시 */ }
+    try { await getRedis().set(CACHE_KEY, data, { ex: 1800 }); } catch { /* Redis 없으면 무시 */ }
   }
 
   // 코스피
