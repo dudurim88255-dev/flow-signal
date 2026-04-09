@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateText } from "ai";
+import { streamText } from "ai";
 import { KOSPI_STOCKS, US_STOCKS, CRYPTO_COINS } from "@/lib/stocks";
 import { getRedis } from "@/lib/redis";
 
@@ -84,15 +84,15 @@ RSI: ${rsi} (${rsi < 30 ? "과매도 구간" : rsi > 70 ? "과열 구간" : "중
 - 숫자를 구체적으로 인용하여 근거 제시`;
 
   try {
-    const { text } = await generateText({
+    const result = streamText({
       model: "anthropic/claude-haiku-4.5",
       prompt,
+      onFinish: async ({ text }) => {
+        try { await getRedis().set(CACHE_KEY, text, { ex: 3600 }); } catch { /* 무시 */ }
+      },
     });
 
-    // 캐시 저장 (1시간)
-    try { await getRedis().set(CACHE_KEY, text, { ex: 3600 }); } catch { /* 무시 */ }
-
-    return NextResponse.json({ comment: text, cached: false });
+    return result.toTextStreamResponse();
   } catch (e) {
     console.error("[ai-comment] 생성 실패:", e);
     return NextResponse.json({ error: "AI 코멘트 생성 실패" }, { status: 500 });

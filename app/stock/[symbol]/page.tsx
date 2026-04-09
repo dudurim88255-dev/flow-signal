@@ -129,12 +129,36 @@ function AIComment({ data }: { data: DetailData }) {
         }),
       });
       if (!res.ok) throw new Error();
-      const json = await res.json();
-      _commentCache.set(sym, json.comment);
-      setComment(json.comment);
+
+      const ct = res.headers.get("content-type") ?? "";
+      if (ct.includes("application/json")) {
+        // 캐시 히트 — JSON 파싱
+        const json = await res.json();
+        _commentCache.set(sym, json.comment);
+        setComment(json.comment);
+        setLoading(false);
+      } else {
+        // 스트리밍 — 첫 청크 도착 시 로딩 스피너 숨기고 텍스트 누적
+        const reader = res.body!.getReader();
+        const decoder = new TextDecoder();
+        let full = "";
+        let firstChunk = true;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          // AI SDK text stream: "0:\"chunk\"\n" 형식 파싱
+          const raw = decoder.decode(value, { stream: true });
+          for (const line of raw.split("\n")) {
+            const m = line.match(/^0:"((?:[^"\\]|\\.)*)"/);
+            if (m) full += m[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+          }
+          if (firstChunk) { setLoading(false); firstChunk = false; }
+          setComment(full);
+        }
+        _commentCache.set(sym, full);
+      }
     } catch {
       setError(true);
-    } finally {
       setLoading(false);
     }
   }, [sym]); // sym만 — dataRef는 렌더마다 갱신되므로 의존성 불필요

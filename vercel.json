@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/warm-stocks",
+      "schedule": "0 * * * *"
+    }
+  ]
+}
