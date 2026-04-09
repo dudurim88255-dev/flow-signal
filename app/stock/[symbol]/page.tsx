@@ -177,13 +177,25 @@ function AIComment({ data }: { data: DetailData }) {
       </div>
 
       {loading && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 0" }}>
-          <div style={{
-            width: 16, height: 16, borderRadius: "50%",
-            border: `2px solid ${T.bd}`, borderTopColor: T.pri,
-            animation: "spin 0.7s linear infinite", flexShrink: 0,
-          }} />
-          <span style={{ fontFamily: MO, fontSize: 12, color: T.tx2 }}>AI가 분석 중...</span>
+        <div style={{ padding: "4px 0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+            <div style={{
+              width: 12, height: 12, borderRadius: "50%",
+              border: `2px solid ${T.bd}`, borderTopColor: T.pri,
+              animation: "spin 0.7s linear infinite", flexShrink: 0,
+            }} />
+            <span style={{ fontFamily: MO, fontSize: 11, color: T.tx2 }}>Claude가 분석 중...</span>
+          </div>
+          {/* 스켈레톤 줄 */}
+          {[100, 90, 95, 70].map((w, i) => (
+            <div key={i} style={{
+              height: 11, borderRadius: 4, marginBottom: 8,
+              width: `${w}%`,
+              background: `linear-gradient(90deg, ${T.bd} 25%, ${T.sfEl} 50%, ${T.bd} 75%)`,
+              backgroundSize: "200% 100%",
+              animation: "shimmer 1.4s infinite",
+            }} />
+          ))}
         </div>
       )}
 
