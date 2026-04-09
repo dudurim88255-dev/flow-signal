@@ -146,12 +146,8 @@ function AIComment({ data }: { data: DetailData }) {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          // AI SDK text stream: "0:\"chunk\"\n" 형식 파싱
-          const raw = decoder.decode(value, { stream: true });
-          for (const line of raw.split("\n")) {
-            const m = line.match(/^0:"((?:[^"\\]|\\.)*)"/);
-            if (m) full += m[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
-          }
+          // toTextStreamResponse()는 plain text를 직접 전송
+          full += decoder.decode(value, { stream: true });
           if (firstChunk) { setLoading(false); firstChunk = false; }
           setComment(full);
         }
