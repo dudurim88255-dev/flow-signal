@@ -87,7 +87,6 @@ RSI: ${rsi} (${rsi < 30 ? "과매도 구간" : rsi > 70 ? "과열 구간" : "중
     const { text } = await generateText({
       model: "anthropic/claude-haiku-4.5",
       prompt,
-      maxTokens: 400,
     });
 
     // 캐시 저장 (1시간)
