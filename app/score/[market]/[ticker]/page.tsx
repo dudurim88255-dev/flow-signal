@@ -600,6 +600,7 @@ export default function ScorePage() {
 
   const esRef = useRef<EventSource | null>(null);
   const gotResultRef = useRef(false);
+  const connectStartRef = useRef<number>(0);
 
   useEffect(() => {
     setSignals([]);
@@ -612,6 +613,7 @@ export default function ScorePage() {
 
     const es = new EventSource(`/api/score/${market}/${ticker}`);
     esRef.current = es;
+    connectStartRef.current = Date.now();
 
     es.addEventListener("signal", (e) => {
       const signal: SignalScore = JSON.parse(e.data);
@@ -636,6 +638,9 @@ export default function ScorePage() {
       // 네이티브 EventSource 오류는 data가 없음 → 무시
       const raw = (e as MessageEvent).data;
       if (raw == null) return;
+      // 연결 직후 2초 이내 에러는 배포 전환/캐시 일시 오류 → 조용히 무시
+      const elapsed = Date.now() - connectStartRef.current;
+      if (elapsed < 2000) { es.close(); return; }
       try {
         const data = JSON.parse(raw);
         setError(data.message ?? "평가 중 오류가 발생했습니다");
@@ -650,6 +655,9 @@ export default function ScorePage() {
       // result를 이미 받은 후의 onerror는 정상 종료 → 무시
       if (gotResultRef.current) { es.close(); return; }
       if (es.readyState === EventSource.CLOSED) return;
+      // 연결 후 2초 이내의 onerror는 배포 전환/캐시 일시 오류 → 조용히 무시
+      const elapsed = Date.now() - connectStartRef.current;
+      if (elapsed < 2000) { es.close(); return; }
       setError("연결이 끊어졌습니다. 새로고침해 주세요.");
       setLoading(false);
       es.close();
