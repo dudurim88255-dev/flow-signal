@@ -23,6 +23,7 @@ export type Prediction = {
   outcome5d?: "correct" | "wrong" | "pending" | "neutral"; // neutral = 관망 예측, 정확도 계산 제외
   outcome14d?: "correct" | "wrong" | "pending" | "neutral";
   verifiedAt?: string;
+  scoreVersion?: string; // 'v3.1' = live-only 가중합 (v3.1 이전은 undefined/'v3.0')
 };
 
 export type MarketWeights = Record<string, number>;  // { C1: 12, C2: 12, ... }

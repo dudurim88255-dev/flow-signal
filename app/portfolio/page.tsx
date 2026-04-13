@@ -5,6 +5,7 @@ import Link from "next/link";
 import { T, FT, MO, changeColor, scoreColor } from "@/lib/theme";
 import { usePortfolio, type Holding } from "@/lib/portfolio";
 import type { StockData } from "@/app/api/kospi/route";
+import { toScoreRouteFromHolding } from "@/lib/routes";
 
 // 보유 종목에 현재가 매핑
 interface HoldingWithPrice extends Holding {
@@ -537,7 +538,7 @@ export default function PortfolioPage() {
                   // 보기 모드
                   <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", alignItems: "center", gap: 12 }}>
                     <Link
-                      href={`/stock/${encodeURIComponent(h.id)}`}
+                      href={toScoreRouteFromHolding(h)}
                       style={{ textDecoration: "none", color: "inherit" }}
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

@@ -1,5 +1,5 @@
 /**
- * FlowSignal v3 — Crypto 12 Signals (C1~C12)
+ * FlowSignal v3 — Crypto 13 Signals (C1~C13)
  * 온체인 + 파생상품 + 기술적 지표 통합
  */
 
@@ -145,8 +145,11 @@ export function computeCryptoSignals(input: CryptoInput, liveFlags?: Record<stri
 }
 
 export function flowScore(signals: SignalScore[]) {
-  const totalW = signals.reduce((s, x) => s + x.weight, 0);
-  const score = signals.reduce((s, x) => s + x.score * x.weight, 0) / totalW;
+  // live: false 신호는 실데이터 없음 — 분자·분모 양쪽에서 제외 (v3.1)
+  const active = signals.filter((x) => x.live);
+  const pool = active.length > 0 ? active : signals; // live 신호가 하나도 없으면 전체 사용 (fallback)
+  const totalW = pool.reduce((s, x) => s + x.weight, 0);
+  const score = pool.reduce((s, x) => s + x.score * x.weight, 0) / totalW;
   const label =
     score >= 75 ? "강매수" :
     score >= 60 ? "매수"   :

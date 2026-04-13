@@ -116,6 +116,7 @@ async function harvestOne(
       priceAtPrediction: result.price,
       outcome5d: "pending",
       outcome14d: "pending",
+      scoreVersion: "v3.1",
     });
 
     return {

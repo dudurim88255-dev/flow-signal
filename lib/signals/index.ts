@@ -38,6 +38,8 @@ export type EvalResult = {
   recentVolume: number;  // v4: 최근 1일 거래량 (리스크 게이트용)
   avgVolume30d: number;  // v4: 30일 평균 거래량
   regime?: string;       // v4: bull | bear | chop (레짐 인식 가중치 적용 시 설정됨)
+  confidence: 'high' | 'medium' | 'low'; // v3.1: live 신호 커버리지 기반 신뢰도
+  confidence_reason: string;             // v3.1: 신뢰도 근거 (low일 때 커버리지 % 표시)
 };
 
 export type StepCallback = (signal: SignalScore) => void;
@@ -218,6 +220,8 @@ async function evaluateCrypto(meta: TickerMeta, onStep?: StepCallback): Promise<
     spark: data.closes.slice(-14),
     recentVolume: data.volumes[data.volumes.length - 1] ?? 0,
     avgVolume30d: data.volumes.slice(-31, -1).reduce((s, v) => s + v, 0) / Math.max(data.volumes.slice(-31, -1).length, 1),
+    confidence: 'high' as const,
+    confidence_reason: '',
   };
 }
 
@@ -280,6 +284,8 @@ async function evaluateKorea(meta: TickerMeta, onStep?: StepCallback): Promise<E
     spark: data.closes.slice(-14),
     recentVolume: data.volumes[data.volumes.length - 1] ?? 0,
     avgVolume30d: data.volumes.slice(-31, -1).reduce((s, v) => s + v, 0) / Math.max(data.volumes.slice(-31, -1).length, 1),
+    confidence: 'high' as const,
+    confidence_reason: '',
   };
 }
 
@@ -331,6 +337,8 @@ async function evaluateUS(meta: TickerMeta, onStep?: StepCallback): Promise<Eval
     spark: data.closes.slice(-14),
     recentVolume: data.volumes[data.volumes.length - 1] ?? 0,
     avgVolume30d: data.volumes.slice(-31, -1).reduce((s, v) => s + v, 0) / Math.max(data.volumes.slice(-31, -1).length, 1),
+    confidence: 'high' as const,
+    confidence_reason: '',
   };
 }
 
@@ -376,6 +384,27 @@ export async function evaluateSignals(
   } catch {
     // 가중치 로딩 실패 시 기본 가중치 유지
   }
+
+  // ── Confidence 계산 (live 신호 weight 커버리지 기반) ─────────────────────
+  const totalW = result.signals.reduce((s, x) => s + x.weight, 0);
+  const liveW  = result.signals.filter((x) => x.live).reduce((s, x) => s + x.weight, 0);
+  const coverage = totalW > 0 ? Math.round((liveW / totalW) * 100) : 0;
+
+  let confidence: 'high' | 'medium' | 'low';
+  let confidence_reason: string;
+  if (coverage >= 70) {
+    confidence = 'high';
+    confidence_reason = `신호 커버리지 ${coverage}%`;
+  } else if (coverage >= 50) {
+    confidence = 'medium';
+    confidence_reason = `신호 커버리지 ${coverage}%`;
+  } else {
+    confidence = 'low';
+    confidence_reason = `신호 커버리지 ${coverage}%`;
+  }
+
+  result.confidence = confidence;
+  result.confidence_reason = confidence_reason;
 
   return result;
 }

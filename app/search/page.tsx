@@ -178,7 +178,7 @@ function SearchPage() {
                     <span className="font-medium">{r.name}</span>
                     <span className="text-gray-500 text-sm">{r.ticker}</span>
                   </div>
-                  <span className="text-xs text-gray-600">{r.sector}</span>
+                  <span className="text-xs text-gray-400">{r.sector}</span>
                 </button>
               ))}
             </div>

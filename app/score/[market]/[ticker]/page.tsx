@@ -234,12 +234,12 @@ function SignalBar({ signal, visible }: { signal: SignalScore; visible: boolean 
     <div className={`transition-all duration-500 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"}`}>
       <div className="flex items-center justify-between mb-1.5">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-[11px] font-mono text-gray-600 w-7 flex-shrink-0">{signal.id}</span>
+          <span className="text-[11px] font-mono text-gray-400 w-7 flex-shrink-0">{signal.id}</span>
           <span className="text-sm text-gray-200 truncate">{signal.name}</span>
           {signal.live ? (
             <span className="text-[10px] px-1 py-0.5 bg-emerald-900/60 text-emerald-400 rounded flex-shrink-0">LIVE</span>
           ) : (
-            <span className="text-[10px] px-1 py-0.5 bg-gray-800 text-gray-600 rounded flex-shrink-0">추정</span>
+            <span className="text-[10px] px-1 py-0.5 bg-gray-800 text-gray-400 rounded flex-shrink-0">추정</span>
           )}
         </div>
         <span className="text-sm font-bold ml-3 flex-shrink-0 tabular-nums" style={{ color }}>
@@ -281,7 +281,7 @@ function SignalGroup({ group, signals, visibleIds }: {
       >
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-gray-200">{group.label}</span>
-          <span className="text-xs text-gray-600">({groupSignals.length})</span>
+          <span className="text-xs text-gray-400">({groupSignals.length})</span>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5">
@@ -368,7 +368,7 @@ function AlertSection({ market, ticker, result }: {
                 <span className="text-sm font-bold text-white">{a.value}점</span>
                 <span className="text-sm text-gray-400">{a.type === "score_above" ? "이상" : "이하"} 도달 시</span>
               </div>
-              <button onClick={() => remove(a.id)} className="text-xs text-gray-600 hover:text-red-400 transition-colors">
+              <button onClick={() => remove(a.id)} className="text-xs text-gray-400 hover:text-red-400 transition-colors">
                 삭제
               </button>
             </div>
@@ -407,12 +407,12 @@ function AlertSection({ market, ticker, result }: {
           >
             {saved ? "✓ 알림 저장됨" : "알림 추가"}
           </button>
-          <p className="text-xs text-gray-600 text-center">FlowScore 조건 도달 시 브라우저 알림으로 알려드립니다</p>
+          <p className="text-xs text-gray-400 text-center">FlowScore 조건 도달 시 브라우저 알림으로 알려드립니다</p>
         </div>
       )}
 
       {!open && myAlerts.length === 0 && (
-        <p className="text-xs text-gray-600 pl-0.5">FlowScore 조건 도달 시 알림을 받을 수 있습니다.</p>
+        <p className="text-xs text-gray-400 pl-0.5">FlowScore 조건 도달 시 알림을 받을 수 있습니다.</p>
       )}
     </div>
   );
@@ -516,7 +516,7 @@ function AiCommentSection({ market, ticker, result, signals }: {
       )}
 
       {!opened && !comment && (
-        <p className="text-xs text-gray-600">버튼을 눌러 이 종목에 대한 AI 해설을 확인하세요.</p>
+        <p className="text-xs text-gray-400">버튼을 눌러 이 종목에 대한 AI 해설을 확인하세요.</p>
       )}
     </div>
   );
@@ -678,7 +678,7 @@ export default function ScorePage() {
               <span className={`text-xs px-2 py-0.5 rounded-md border font-semibold ${marketBadgeStyle}`}>
                 {marketLabel}
               </span>
-              <span className="text-xs font-mono text-gray-600">{decodeURIComponent(ticker)}</span>
+              <span className="text-xs font-mono text-gray-400">{decodeURIComponent(ticker)}</span>
             </div>
             <h1 className="text-xl font-black text-white truncate">
               {result?.name ?? decodeURIComponent(ticker)}
@@ -714,7 +714,7 @@ export default function ScorePage() {
                   const val = i === 0 ? result?.ret7d : result?.ret30d;
                   return (
                     <div key={label} className="flex flex-col">
-                      <span className="text-[10px] text-gray-600 mb-0.5">{label}</span>
+                      <span className="text-[10px] text-gray-400 mb-0.5">{label}</span>
                       {val !== undefined && val !== null ? (
                         <span className={`text-sm font-bold tabular-nums ${pctColor(val)}`}>
                           {pctStr(val)}
@@ -746,7 +746,7 @@ export default function ScorePage() {
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                {result.cached && <span className="text-gray-700">캐시됨</span>}
+                {result.cached && <span className="text-gray-400">캐시됨</span>}
                 <span className={`text-xs px-2 py-0.5 rounded-md border font-semibold ${scoreToBg(result.score)}`}>
                   {result.label}
                 </span>
@@ -759,7 +759,7 @@ export default function ScorePage() {
         {loading && (
           <div className="flex items-center gap-3 text-gray-400 mb-5 px-1">
             <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-            <span className="text-sm">신호 분석 중… <span className="tabular-nums text-gray-600">({signals.length}/12)</span></span>
+            <span className="text-sm">신호 분석 중… <span className="tabular-nums text-gray-400">({signals.length}/12)</span></span>
           </div>
         )}
 
@@ -816,7 +816,7 @@ export default function ScorePage() {
 
         {/* ── 푸터 ── */}
         {result && (
-          <div className="pt-4 border-t border-gray-800/50 text-xs text-gray-700 space-y-1">
+          <div className="pt-4 border-t border-gray-800/50 text-xs text-gray-400 space-y-1">
             <div className="flex items-center justify-between">
               <span>{result.modelVersion}</span>
               <span>{new Date(result.evaluatedAt).toLocaleString("ko-KR")}</span>

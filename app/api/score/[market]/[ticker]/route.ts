@@ -125,6 +125,7 @@ export async function GET(
           priceAtPrediction: result.price,
           outcome5d: "pending",
           outcome14d: "pending",
+          scoreVersion: "v3.1",
         }).catch((err) =>
           console.warn(`[score] 예측 저장 실패 ${market}/${ticker}:`, err instanceof Error ? err.message : err)
         );

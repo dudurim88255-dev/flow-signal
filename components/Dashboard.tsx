@@ -425,7 +425,7 @@ export default function Dashboard() {
                       }}>
                         {s.signal}
                       </span>
-                      <span style={{ fontFamily: MO, fontSize: 12, fontWeight: 700, color }}>
+                      <span className="tabular-nums" style={{ fontFamily: MO, fontSize: 12, fontWeight: 700, color }}>
                         {s.score}
                       </span>
                     </div>
@@ -596,6 +596,7 @@ export default function Dashboard() {
         본 서비스는 베타 기간 무료로 제공되며, 정보 제공 목적의 데이터 서비스입니다.<br />
         투자자문이나 투자권유가 아니며, 모든 투자 결정과 그에 따른 책임은 사용자 본인에게 있습니다.<br />
         <span style={{ fontSize: 10 }}>FlowSignal © 2025 · 문의: dudurim88255-dev</span>
+        <span style={{ fontSize: 10, color: "#6e7681", float: "right" }}>v3.1 (2026-04-13)</span>
       </div>
 
       {/* 알림 설정 모달 */}

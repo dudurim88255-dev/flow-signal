@@ -81,10 +81,20 @@ export async function GET(req: NextRequest) {
 
   for (const market of MARKETS) {
     const predictions = await getAllPredictions(market);
-    const verified = predictions.filter((p) => p.outcome14d === "correct" || p.outcome14d === "wrong");
+    // v3.1 이전 예측(biased scores)과 섞이지 않도록 scoreVersion 필터링
+    const verified = predictions.filter(
+      (p) => (p.outcome14d === "correct" || p.outcome14d === "wrong") && p.scoreVersion === "v3.1"
+    );
+
+    // 예상 해제일 계산: 하루 1개 수집 가정 → 부족 샘플 수만큼 날짜 추가
+    const daysUntilUnlock = Math.max(0, MIN_SAMPLE - verified.length);
+    const unlockDate = new Date();
+    unlockDate.setDate(unlockDate.getDate() + daysUntilUnlock);
+    const unlockStr = unlockDate.toISOString().slice(0, 10);
+    const learningStatus = verified.length >= MIN_SAMPLE ? "학습중" : "동결중";
+    console.log(`[evolve] ${market}: v3.1 샘플 ${verified.length}개 / 최소 ${MIN_SAMPLE}개 — 가중치 ${learningStatus} (예상 해제: ${unlockStr})`);
 
     if (verified.length < MIN_SAMPLE) {
-      console.log(`[evolve] ${market}: 샘플 부족 (${verified.length}/${MIN_SAMPLE}) — 건너뜀`);
       report[market] = { skipped: true, samples: verified.length };
       continue;
     }
@@ -128,8 +138,9 @@ export async function GET(req: NextRequest) {
   for (const market of MARKETS) {
     try {
       const predictions = await getAllPredictions(market);
+      // v3.1 예측만 사용 — biased 이전 데이터 제외
       const verified = predictions.filter(
-        (p) => p.outcome14d === "correct" || p.outcome14d === "wrong"
+        (p) => (p.outcome14d === "correct" || p.outcome14d === "wrong") && p.scoreVersion === "v3.1"
       );
       if (verified.length < MIN_SAMPLE) continue;
 

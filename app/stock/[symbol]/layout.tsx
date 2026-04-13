@@ -13,7 +13,7 @@ export async function generateMetadata({
   const stock = ALL_STOCKS.find((s) => s.symbol === decoded);
 
   if (!stock) {
-    return { title: "FlowSignal" };
+    return { title: "FlowSignal", robots: { index: false, follow: false } };
   }
 
   const title = `${stock.name} (${stock.symbol.replace(".KS", "")}) AI 시그널 — FlowSignal`;
@@ -22,6 +22,7 @@ export async function generateMetadata({
   return {
     title,
     description,
+    robots: { index: false, follow: false },
     openGraph: {
       title,
       description,

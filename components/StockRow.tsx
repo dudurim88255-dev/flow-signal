@@ -2,12 +2,13 @@
 import Link from "next/link";
 import { T, FT, MO, scoreColor, changeColor } from "@/lib/theme";
 import type { StockData } from "@/app/api/kospi/route";
+import { toScoreRouteFromData } from "@/lib/routes";
 import Sparkline from "./Sparkline";
 import FlowScoreRing from "./FlowScoreRing";
 
 function PctBadge({ val }: { val: number }) {
   return (
-    <span style={{ color: changeColor(val), fontFamily: MO, fontSize: 12 }}>
+    <span className="tabular-nums" style={{ color: changeColor(val), fontFamily: MO, fontSize: 12 }}>
       {val > 0 ? "+" : ""}{val}%
     </span>
   );
@@ -25,11 +26,11 @@ interface Props {
 export default function StockRow({ stock, rank, isWatched = false, onToggleWatch, hasAlert = false, onSetAlert }: Props) {
   const sparkColor = stock.p7d >= 0 ? T.ok : T.dn;
   const gradeColor = scoreColor(stock.score);
-  const routeId = stock.coinId ?? stock.symbol;
+  const scoreHref = toScoreRouteFromData(stock);
 
   return (
     <Link
-      href={`/stock/${encodeURIComponent(routeId)}`}
+      href={scoreHref}
       style={{ textDecoration: "none", color: "inherit", display: "block" }}
     >
       <div className="stock-row-grid" style={{
@@ -70,7 +71,7 @@ export default function StockRow({ stock, rank, isWatched = false, onToggleWatch
 
         {/* 가격 + 1d */}
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontFamily: MO, fontSize: 13 }}>{stock.priceStr}</div>
+          <div className="tabular-nums" style={{ fontFamily: MO, fontSize: 13 }}>{stock.priceStr}</div>
           <div style={{ fontFamily: MO, fontSize: 11, color: T.tx2 }}>
             1d <PctBadge val={stock.change1d} />
           </div>
@@ -101,7 +102,7 @@ export default function StockRow({ stock, rank, isWatched = false, onToggleWatch
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            onToggleWatch?.(routeId);
+            onToggleWatch?.(stock.coinId ?? stock.symbol);
           }}
           style={{
             background: "none",
