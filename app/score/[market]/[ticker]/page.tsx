@@ -599,6 +599,7 @@ export default function ScorePage() {
   const [gaugeAnim, setGaugeAnim] = useState(false);
 
   const esRef = useRef<EventSource | null>(null);
+  const gotResultRef = useRef(false);
 
   useEffect(() => {
     setSignals([]);
@@ -607,6 +608,7 @@ export default function ScorePage() {
     setError(null);
     setLoading(true);
     setGaugeAnim(false);
+    gotResultRef.current = false;
 
     const es = new EventSource(`/api/score/${market}/${ticker}`);
     esRef.current = es;
@@ -621,6 +623,7 @@ export default function ScorePage() {
 
     es.addEventListener("result", (e) => {
       const data: ResultMeta = JSON.parse(e.data);
+      gotResultRef.current = true;
       setResult(data);
       setLoading(false);
       es.close();
@@ -628,6 +631,8 @@ export default function ScorePage() {
     });
 
     es.addEventListener("error", (e) => {
+      // result 수신 후 스트림 종료 시 발생하는 이벤트 → 무시
+      if (gotResultRef.current) { es.close(); return; }
       // 네이티브 EventSource 오류는 data가 없음 → 무시
       const raw = (e as MessageEvent).data;
       if (raw == null) return;
@@ -642,6 +647,8 @@ export default function ScorePage() {
     });
 
     es.onerror = () => {
+      // result를 이미 받은 후의 onerror는 정상 종료 → 무시
+      if (gotResultRef.current) { es.close(); return; }
       if (es.readyState === EventSource.CLOSED) return;
       setError("연결이 끊어졌습니다. 새로고침해 주세요.");
       setLoading(false);
