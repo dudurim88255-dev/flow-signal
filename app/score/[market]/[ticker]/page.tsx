@@ -690,20 +690,19 @@ export default function ScorePage() {
         </a>
       </nav>
 
-      <div className="max-w-4xl mx-auto px-4 py-6">
+      <div className="max-w-lg mx-auto px-4 py-6">
 
         {/* ── 히어로 카드 ── */}
         <div className="mb-6 rounded-2xl overflow-hidden border border-gray-800">
           {/* 종목명 영역 */}
           <div className="px-5 pt-5 pb-4 bg-gray-900">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-1">
               <span className={`text-xs px-2 py-0.5 rounded-md border font-semibold ${marketBadgeStyle}`}>
                 {marketLabel}
               </span>
-              <span className="text-xs font-mono text-gray-500">·</span>
               <span className="text-xs font-mono text-gray-400">{decodeURIComponent(ticker)}</span>
             </div>
-            <h1 className="text-3xl font-bold text-white tracking-tight truncate">
+            <h1 className="text-xl font-black text-white truncate">
               {result?.name ?? decodeURIComponent(ticker)}
             </h1>
           </div>
@@ -717,21 +716,8 @@ export default function ScorePage() {
               <div className="w-[136px] h-[136px] rounded-full border-[12px] border-gray-800 animate-pulse flex-shrink-0" />
             )}
 
-            {/* 점수 + 가격 & 수익률 */}
+            {/* 가격 & 수익률 */}
             <div className="flex-1 min-w-0 space-y-3">
-              {/* 점수 크게 표시 */}
-              {result ? (
-                <div className="flex items-center gap-3">
-                  <span className="text-5xl font-bold tabular-nums leading-none" style={{ color: scoreToColor(result.score) }}>
-                    {result.score.toFixed(1)}
-                  </span>
-                  <span className={`text-xs px-2.5 py-1 rounded-lg border font-bold ${scoreToBg(result.score)}`}>
-                    {result.label}
-                  </span>
-                </div>
-              ) : (
-                <div className="h-12 w-36 bg-gray-800 rounded-xl animate-pulse" />
-              )}
               {result?.price ? (
                 <div>
                   <p className="text-2xl font-black text-white tabular-nums">
@@ -807,34 +793,22 @@ export default function ScorePage() {
         )}
 
         {/* ── 거시경제 맥락 ── */}
-        <div className="bg-gray-900/50 rounded-xl border border-gray-800 p-4 mb-4">
-          <MacroContextCard market={market} />
-        </div>
+        <MacroContextCard market={market} />
 
         {/* ── 상위 드라이버 ── */}
-        {signals.length > 0 && (
-          <div className="bg-gray-900/50 rounded-xl border border-gray-800 p-4 mb-4">
-            <TopDrivers signals={signals} />
-          </div>
-        )}
+        {signals.length > 0 && <TopDrivers signals={signals} />}
 
         {/* ── AI 해설 ── */}
         {result && signals.length >= 6 && (
-          <div className="bg-gray-900/50 rounded-xl border border-gray-800 p-4 mb-4">
-            <AiCommentSection market={market} ticker={ticker} result={result} signals={signals} />
-          </div>
+          <AiCommentSection market={market} ticker={ticker} result={result} signals={signals} />
         )}
 
         {/* ── 알림 설정 ── */}
-        {result && (
-          <div className="bg-gray-900/50 rounded-xl border border-gray-800 p-4 mb-4">
-            <AlertSection market={market} ticker={ticker} result={result} />
-          </div>
-        )}
+        {result && <AlertSection market={market} ticker={ticker} result={result} />}
 
-        {/* ── 12개 신호 상세 ── */}
+        {/* ── 구분선 ── */}
         {groups.length > 0 && signals.length > 0 && (
-          <div className="bg-gray-900/50 rounded-xl border border-gray-800 p-4 mb-4">
+          <div className="border-t border-gray-800 pt-5 mb-5">
             <SectionLabel>12개 신호 상세</SectionLabel>
             <div className="space-y-2">
               {groups.map((g) => (
@@ -846,7 +820,7 @@ export default function ScorePage() {
 
         {/* 스켈레톤 */}
         {loading && signals.length === 0 && groups.length > 0 && (
-          <div className="space-y-2 mb-4">
+          <div className="space-y-2 mb-5">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="h-14 bg-gray-900 border border-gray-800 rounded-xl animate-pulse" />
             ))}
@@ -855,12 +829,10 @@ export default function ScorePage() {
 
         {/* 미분류 신호 폴백 */}
         {groups.length === 0 && signals.length > 0 && (
-          <div className="bg-gray-900/50 rounded-xl border border-gray-800 p-4 mb-4">
-            <div className="space-y-4">
-              {signals.map((s) => (
-                <SignalBar key={s.id} signal={s} visible={visibleIds.has(s.id)} />
-              ))}
-            </div>
+          <div className="space-y-4 mb-5">
+            {signals.map((s) => (
+              <SignalBar key={s.id} signal={s} visible={visibleIds.has(s.id)} />
+            ))}
           </div>
         )}
 
