@@ -628,15 +628,22 @@ export default function ScorePage() {
     });
 
     es.addEventListener("error", (e) => {
-      const data = JSON.parse((e as MessageEvent).data ?? "{}");
-      setError(data.message ?? "평가 중 오류가 발생했습니다");
+      // 네이티브 EventSource 오류는 data가 없음 → 무시
+      const raw = (e as MessageEvent).data;
+      if (raw == null) return;
+      try {
+        const data = JSON.parse(raw);
+        setError(data.message ?? "평가 중 오류가 발생했습니다");
+      } catch {
+        setError("평가 중 오류가 발생했습니다");
+      }
       setLoading(false);
       es.close();
     });
 
     es.onerror = () => {
       if (es.readyState === EventSource.CLOSED) return;
-      setError("연결이 끊어졌습니다. 새로고침 해주세요.");
+      setError("연결이 끊어졌습니다. 새로고침해 주세요.");
       setLoading(false);
       es.close();
     };
@@ -661,7 +668,7 @@ export default function ScorePage() {
       {/* 상단 네비 */}
       <nav className="sticky top-0 z-10 bg-gray-950/90 backdrop-blur border-b border-gray-900 px-4 py-3">
         <a href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-300 transition-colors">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg width={16} height={16} className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
           대시보드
