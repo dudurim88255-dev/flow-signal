@@ -1,4 +1,4 @@
-export type Market = "kospi" | "us" | "crypto";
+export type Market = "kospi" | "kosdaq" | "us" | "crypto";
 
 export interface StockDef {
   symbol: string;     // yahoo finance 심볼
@@ -57,11 +57,35 @@ export const KOSPI_STOCKS: StockDef[] = [
   // 중공업
   { symbol: "034020.KS", name: "두산에너빌리티",   sector: "중공업",   market: "kospi" },
   // 게임
-  { symbol: "293490.KS", name: "카카오게임즈",     sector: "게임",     market: "kospi" },
   { symbol: "251270.KS", name: "넷마블",           sector: "게임",     market: "kospi" },
   // 보험·금융
   { symbol: "032830.KS", name: "삼성생명",         sector: "보험",     market: "kospi" },
   { symbol: "138040.KS", name: "메리츠금융지주",   sector: "보험",     market: "kospi" },
+];
+
+// 코스닥 TOP 15
+export const KOSDAQ_STOCKS: StockDef[] = [
+  // 2차전지
+  { symbol: "247540.KQ", name: "에코프로비엠",     sector: "2차전지",  market: "kosdaq" },
+  { symbol: "086520.KQ", name: "에코프로",         sector: "2차전지",  market: "kosdaq" },
+  // 바이오
+  { symbol: "028300.KQ", name: "HLB",              sector: "바이오",   market: "kosdaq" },
+  { symbol: "196170.KQ", name: "알테오젠",         sector: "바이오",   market: "kosdaq" },
+  { symbol: "141080.KQ", name: "리가켐바이오",     sector: "바이오",   market: "kosdaq" },
+  { symbol: "068760.KQ", name: "셀트리온제약",     sector: "바이오",   market: "kosdaq" },
+  { symbol: "237690.KQ", name: "에스티팜",         sector: "바이오",   market: "kosdaq" },
+  { symbol: "214450.KQ", name: "파마리서치",       sector: "바이오",   market: "kosdaq" },
+  // 반도체·소재
+  { symbol: "403870.KQ", name: "HPSP",             sector: "반도체",   market: "kosdaq" },
+  { symbol: "357780.KQ", name: "솔브레인",         sector: "반도체소재", market: "kosdaq" },
+  { symbol: "240810.KQ", name: "원익IPS",          sector: "반도체장비", market: "kosdaq" },
+  // 의료기기
+  { symbol: "214150.KQ", name: "클래시스",         sector: "의료기기", market: "kosdaq" },
+  // 게임
+  { symbol: "293490.KQ", name: "카카오게임즈",     sector: "게임",     market: "kosdaq" },
+  { symbol: "263750.KQ", name: "펄어비스",         sector: "게임",     market: "kosdaq" },
+  // 로봇
+  { symbol: "277810.KQ", name: "레인보우로보틱스", sector: "로봇",     market: "kosdaq" },
 ];
 
 // 미국 주요주 25개

@@ -7,7 +7,7 @@ export interface Alert {
   stockId: string;          // coinId 또는 symbol
   name: string;
   symbol: string;
-  market: "kospi" | "us" | "crypto";
+  market: "kospi" | "korea" | "us" | "crypto";
   type: "price_above" | "price_below" | "score_above" | "score_below";
   value: number;
   createdAt: number;
@@ -86,5 +86,25 @@ export function checkAlerts(alerts: Alert[], stocks: StockData[]): TriggeredAler
         ? current >= alert.value
         : current <= alert.value;
     return hit ? [{ alert, currentValue: current }] : [];
+  });
+}
+
+// 브라우저 알림 권한 요청 (한 번만 호출)
+export async function requestNotificationPermission(): Promise<boolean> {
+  if (typeof window === "undefined" || !("Notification" in window)) return false;
+  if (Notification.permission === "granted") return true;
+  if (Notification.permission === "denied") return false;
+  const result = await Notification.requestPermission();
+  return result === "granted";
+}
+
+// 브라우저 알림 발송
+export function fireNotification(title: string, body: string) {
+  if (typeof window === "undefined" || !("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+  new Notification(title, {
+    body,
+    icon: "/favicon.ico",
+    tag: `flowsignal-${title}`,  // 동일 tag는 덮어써서 중복 방지
   });
 }

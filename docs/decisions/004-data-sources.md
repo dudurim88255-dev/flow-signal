@@ -16,6 +16,7 @@
 | CoinGecko | OHLCV, 시총, MVRV | 무료 플랜, rate limit 있음 |
 | Binance | 펀딩레이트, OI, L/S ratio | 공개 엔드포인트, 인증 불필요 |
 | alternative.me | Fear & Greed Index | 단일 숫자, 일 1회 업데이트 |
+| Binance (추가) | 24h 강제청산 집계 (C13) | `allForceOrders` 공개 엔드포인트, 인증 불필요 |
 
 ### 온체인 데이터 (현재 미연동)
 고래 순매수(`whaleNet24h`), 거래소 순유출(`exchangeNetOut`), 스테이블코인 유입(`stablecoinIn24h`)은  
@@ -30,3 +31,5 @@ US 종목 신호 K12에서 종목 수익률과 비교.
 현재 Yahoo Finance + CoinGecko 무료 플랜 + Binance 공개 API 조합으로  
 **US·KOSPI·Crypto 전체 평가**가 외부 API 키 없이 동작한다.  
 (Anthropic API 키는 `ai-comment` 기능 전용)
+
+C13 신호는 Binance `allForceOrders` 공개 엔드포인트를 사용하므로 추가 API 키 불필요.

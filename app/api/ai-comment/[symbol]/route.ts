@@ -1,16 +1,26 @@
 import { NextResponse } from "next/server";
 import { streamText } from "ai";
-import { KOSPI_STOCKS, US_STOCKS, CRYPTO_COINS } from "@/lib/stocks";
 import { getRedis } from "@/lib/redis";
 
 export const revalidate = 0;
 
-// 허용된 심볼 집합 — 등록되지 않은 심볼로 API 비용 폭탄 방지
-const ALLOWED_SYMBOLS = new Set([
-  ...KOSPI_STOCKS.map((s) => s.symbol),
-  ...US_STOCKS.map((s) => s.symbol),
-  ...CRYPTO_COINS.map((s) => s.symbol),
-]);
+// 마켓별 심볼 형식 검증 — API 비용 폭탄 방지 (predefined 목록 불필요)
+function isValidSymbol(symbol: string, market: string): boolean {
+  if (!symbol || symbol.length > 30) return false;
+  if (market === "korea" || market === "kospi") {
+    // 종목코드(6자리 숫자) 또는 Yahoo 심볼(005930.KS)
+    return /^\d{6}(\.KS|\.KQ)?$/.test(symbol);
+  }
+  if (market === "us") {
+    // 미국 티커: 1~10자 대소문자+숫자
+    return /^[A-Za-z0-9]{1,10}$/.test(symbol);
+  }
+  if (market === "crypto") {
+    // CoinGecko ID: 소문자 알파벳+숫자+하이픈 (bitcoin, avalanche-2 등)
+    return /^[a-z0-9][a-z0-9\-]{0,49}$/.test(symbol);
+  }
+  return false;
+}
 
 interface CommentRequest {
   name: string;
@@ -34,8 +44,21 @@ export async function POST(
   const { symbol } = await params;
   const decoded = decodeURIComponent(symbol);
 
-  // 허용 심볼 검증
-  if (!ALLOWED_SYMBOLS.has(decoded)) {
+  // body 먼저 파싱 — market 정보로 심볼 검증
+  let body: CommentRequest;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+  }
+
+  const {
+    name, market, score, grade, change1d, p7d, p30d,
+    rsi, volRatio, signals, components,
+  } = body;
+
+  // 마켓 + 심볼 형식 검증 (API 비용 폭탄 방지)
+  if (!isValidSymbol(decoded, market)) {
     return NextResponse.json({ error: "허용되지 않은 종목" }, { status: 400 });
   }
 
@@ -48,18 +71,6 @@ export async function POST(
     const cached = await getRedis().get<string>(CACHE_KEY);
     if (cached) return NextResponse.json({ comment: cached, cached: true });
   } catch { /* Redis 없으면 무시 */ }
-
-  let body: CommentRequest;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
-  }
-
-  const {
-    name, market, score, grade, change1d, p7d, p30d,
-    rsi, volRatio, signals, components,
-  } = body;
 
   const marketLabel = market === "kospi" ? "코스피" : market === "us" ? "미국" : "암호화폐";
   const signalStr = signals.length > 0 ? signals.join(", ") : "특별 시그널 없음";

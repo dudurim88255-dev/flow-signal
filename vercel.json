@@ -2,7 +2,27 @@
   "crons": [
     {
       "path": "/api/cron/warm-stocks",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/regime",
+      "schedule": "30 0 * * *"
+    },
+    {
+      "path": "/api/cron/harvest",
       "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/verify",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/evolve",
+      "schedule": "0 3 * * 0"
+    },
+    {
+      "path": "/api/cron/narrate",
+      "schedule": "0 4 * * 0"
     }
   ]
 }

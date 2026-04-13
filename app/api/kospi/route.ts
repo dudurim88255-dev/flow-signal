@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import yahooFinance from "@/lib/yahoo";
 import { KOSPI_STOCKS } from "@/lib/stocks";
-import { calculateFlowScore } from "@/lib/flowscore";
+import { evaluateSignals } from "@/lib/signals";
 import { getRedis } from "@/lib/redis";
 
 export const revalidate = 0;
@@ -33,47 +33,38 @@ function fmtKRW(n: number): string {
 
 async function fetchStock(def: typeof KOSPI_STOCKS[number]): Promise<StockData | null> {
   try {
-    const past = new Date();
-    past.setDate(past.getDate() - 90);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const [quote, chart]: [any, any] = await Promise.all([
-      yahooFinance.quote(def.symbol, {}, { validateResult: false }),
-      yahooFinance.chart(def.symbol, {
-        period1: past.toISOString().split("T")[0],
-        interval: "1d",
-      }, { validateResult: false }),
+    // quote: change1d, volume 등 당일 데이터 / evaluateSignals: 12시그널 점수
+    const [quote, evalResult] = await Promise.all([
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      yahooFinance.quote(def.symbol, {}, { validateResult: false }) as Promise<any>,
+      evaluateSignals("korea", def.symbol),
     ]);
 
     if (!quote || !quote.regularMarketPrice) return null;
 
-    const quotes: { close?: number | null; volume?: number | null }[] = chart?.quotes ?? [];
-    const closes = quotes.map((q) => q.close ?? 0).filter((v) => v > 0);
-    const volumes = quotes.map((q) => q.volume ?? 0);
-
-    const flow = calculateFlowScore(closes, volumes);
-    const spark = closes.slice(-14);
-    const price = quote.regularMarketPrice;
-    const change1d = quote.regularMarketChangePercent ?? 0;
+    const price = quote.regularMarketPrice as number;
+    const change1d = (quote.regularMarketChangePercent as number) ?? 0;
+    const p7d = Math.round(evalResult.ret7d * 1000) / 10;
+    const p30d = Math.round(evalResult.ret30d * 1000) / 10;
 
     return {
       symbol: def.symbol,
       name: def.name,
       sector: def.sector,
-      market: "kospi" as const,
+      market: "kospi",
       price,
       priceStr: fmtKRW(price),
       change1d: Math.round(change1d * 10) / 10,
-      p7d: flow.p7d,
-      p30d: flow.p30d,
-      volume: quote.regularMarketVolume ?? 0,
-      marketCap: quote.marketCap ?? 0,
-      volRatio: flow.volRatio,
-      rsi: flow.rsi,
-      score: flow.score,
-      grade: flow.grade,
-      signals: flow.signals,
-      spark,
+      p7d,
+      p30d,
+      volume: (quote.regularMarketVolume as number) ?? 0,
+      marketCap: (quote.marketCap as number) ?? 0,
+      volRatio: 1,
+      rsi: 50,
+      score: evalResult.score,
+      grade: evalResult.label,
+      signals: evalResult.signals.map((s) => s.name),
+      spark: evalResult.spark,
     };
   } catch (e) {
     console.error(`[api/kospi] ${def.symbol} 조회 실패:`, e instanceof Error ? e.message : e);
@@ -82,13 +73,13 @@ async function fetchStock(def: typeof KOSPI_STOCKS[number]): Promise<StockData |
 }
 
 export async function GET() {
-  const CACHE_KEY = "flowsignal:kospi:v1";
+  const CACHE_KEY = "flowsignal:kospi:v2";
 
   try {
     const cached = await getRedis().get<StockData[]>(CACHE_KEY);
     if (cached) return NextResponse.json({ stocks: cached, cached: true });
   } catch {
-    // Redis 없으면 그냥 진행
+    // Redis 없으면 진행
   }
 
   const results = await Promise.all(KOSPI_STOCKS.map(fetchStock));
@@ -99,7 +90,7 @@ export async function GET() {
   console.info(`[api/kospi] 조회 완료: ${stocks.length}/${KOSPI_STOCKS.length}개`);
 
   try {
-    await getRedis().set(CACHE_KEY, stocks, { ex: 1800 });
+    await getRedis().set(CACHE_KEY, stocks, { ex: 900 }); // 15분 TTL
   } catch (e) {
     console.warn("[api/kospi] Redis 캐시 저장 실패:", e instanceof Error ? e.message : e);
   }

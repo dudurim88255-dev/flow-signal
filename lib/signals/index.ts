@@ -15,8 +15,9 @@ import {
   computeOhlcvIndicators,
 } from "./fetcher";
 import { returnPct } from "./compute";
-import { CRYPTO_COINS, KOSPI_STOCKS, US_STOCKS } from "../stocks";
-import { getWeights } from "../predictions";
+import { CRYPTO_COINS, KOSPI_STOCKS, KOSDAQ_STOCKS, US_STOCKS } from "../stocks";
+import { getRegimeWeights } from "../predictions";
+import { getCurrentRegime } from "./regime";
 
 export type Market = "crypto" | "korea" | "us";
 
@@ -30,10 +31,11 @@ export type EvalResult = {
   liveCount: number;
   totalCount: number;
   evaluatedAt: string;
-  price: number; // 예측 시점 현재가
+  price: number;   // 예측 시점 현재가
   ret7d: number;   // 7일 수익률 (소수, e.g. 0.05 = +5%)
   ret30d: number;  // 30일 수익률
   spark: number[]; // 최근 14일 종가 (스파크라인)
+  regime?: string; // v4: bull | bear | chop (레짐 인식 가중치 적용 시 설정됨)
 };
 
 export type StepCallback = (signal: SignalScore) => void;
@@ -107,8 +109,9 @@ export function findTicker(market: Market, ticker: string): TickerMeta {
   }
 
   if (market === "korea") {
-    // stocks.ts에서 symbol = Yahoo Finance 심볼 (e.g. '005930.KS')
-    const stock = KOSPI_STOCKS.find(
+    // KOSPI + KOSDAQ 통합 검색
+    const allKorea = [...KOSPI_STOCKS, ...KOSDAQ_STOCKS];
+    const stock = allKorea.find(
       (s) =>
         s.symbol === ticker ||
         s.symbol.split(".")[0] === ticker ||
@@ -122,7 +125,7 @@ export function findTicker(market: Market, ticker: string): TickerMeta {
         yahooSymbol: stock.symbol,
       };
     }
-    // 목록에 없는 한국 종목: Yahoo Finance 심볼 자동 구성
+    // 목록에 없는 한국 종목: 심볼에 .KQ/.KS 명시 시 그대로, 없으면 .KS 기본
     const code = ticker.replace(/\.(KS|KQ)$/i, "");
     const yahooSymbol = /\.(KS|KQ)$/i.test(ticker) ? ticker : `${ticker}.KS`;
     return { market, ticker: code, name: code, yahooSymbol };
@@ -180,6 +183,8 @@ async function evaluateCrypto(meta: TickerMeta, onStep?: StepCallback): Promise<
     volumeToday: data.volumes[data.volumes.length - 1] ?? 0,
     volumeHistory30d: data.volumes.slice(-31, -1),
     priceUp: ind.priceUp,
+    longLiq24h: data.longLiq24h,
+    shortLiq24h: data.shortLiq24h,
   }, {
     // live 플래그: 온체인 제외하고 나머지는 live
     C4: true,  // Binance fundingRate
@@ -189,6 +194,7 @@ async function evaluateCrypto(meta: TickerMeta, onStep?: StepCallback): Promise<
     C8: true,  // A/D divergence (OHLCV)
     C11: true, // momentum (OHLCV)
     C12: true, // volume Z (OHLCV)
+    C13: true, // Binance allForceOrders (공개 엔드포인트)
   });
 
   if (onStep) signals.forEach(onStep);
@@ -342,9 +348,11 @@ export async function evaluateSignals(
     case "us":     result = await evaluateUS(meta, onStep); break;
   }
 
-  // Redis에 저장된 진화된 가중치가 있으면 적용 후 점수 재계산
+  // 현재 레짐에 맞는 진화된 가중치 적용 후 점수 재계산
+  // bull/bear/chop별로 별도 학습된 가중치 사용, 없으면 global weights fallback
   try {
-    const storedWeights = await getWeights(market);
+    const regime = (await getCurrentRegime(market)) ?? "chop";
+    const storedWeights = await getRegimeWeights(market, regime);
     if (storedWeights) {
       for (const sig of result.signals) {
         if (sig.id in storedWeights) {
@@ -354,6 +362,8 @@ export async function evaluateSignals(
       const { score, label } = flowScore(result.signals);
       result.score = score;
       result.label = label;
+      // 레짐 정보를 결과에 포함
+      (result as EvalResult & { regime?: string }).regime = regime;
     }
   } catch {
     // 가중치 로딩 실패 시 기본 가중치 유지

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { T, FT, MO, scoreColor, changeColor } from "@/lib/theme";
 import type { StockData } from "@/app/api/kospi/route";
@@ -7,7 +7,7 @@ import StockRow from "./StockRow";
 import SectorHeatmap from "./SectorHeatmap";
 import AlertModal from "./AlertModal";
 import { useWatchlist } from "@/lib/watchlist";
-import { useAlerts, checkAlerts } from "@/lib/alerts";
+import { useAlerts, checkAlerts, requestNotificationPermission, fireNotification } from "@/lib/alerts";
 
 type Tab = "kospi" | "us" | "crypto" | "watchlist";
 
@@ -154,8 +154,16 @@ export default function Dashboard() {
   const [gradeFilter, setGradeFilter] = useState<string>("전체");
   const [alertModalStock, setAlertModalStock] = useState<StockData | null>(null);
   const [alertDismissed, setAlertDismissed] = useState(false);
+  const [notifPermission, setNotifPermission] = useState<string>("default");
   const watchlist = useWatchlist();
   const alerts = useAlerts();
+
+  // 앱 로드 시 알림 권한 상태 동기화
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setNotifPermission(Notification.permission);
+    }
+  }, []);
 
   const fetchMarket = useCallback(async (tab: Exclude<Tab, "watchlist">) => {
     setMarkets(prev => ({
@@ -209,6 +217,28 @@ export default function Dashboard() {
     [alerts.alerts, allStocks]
   );
 
+  // 발동된 알림이 생기면 브라우저 알림 push
+  const prevTriggeredRef = useRef<string[]>([]);
+  useEffect(() => {
+    if (triggeredAlerts.length === 0) return;
+    const newIds = triggeredAlerts
+      .map(t => t.alert.id)
+      .filter(id => !prevTriggeredRef.current.includes(id));
+
+    if (newIds.length > 0) {
+      newIds.forEach(id => {
+        const t = triggeredAlerts.find(x => x.alert.id === id)!;
+        const isScore = t.alert.type.startsWith("score");
+        const typeLabel = t.alert.type.endsWith("above") ? "이상" : "이하";
+        const body = isScore
+          ? `FlowScore ${t.alert.value}점 ${typeLabel} 도달 (현재 ${Math.round(t.currentValue)}점)`
+          : `가격 ${t.alert.value.toLocaleString()} ${typeLabel} 도달 (현재 ${t.currentValue.toLocaleString()})`;
+        fireNotification(`🔔 ${t.alert.name}`, body);
+      });
+      prevTriggeredRef.current = triggeredAlerts.map(t => t.alert.id);
+    }
+  }, [triggeredAlerts]);
+
   // 관심 종목 탭 데이터
   const watchlistData = allStocks.filter((s) => watchlist.has(s.coinId ?? s.symbol));
 
@@ -228,6 +258,36 @@ export default function Dashboard() {
 
   return (
     <div style={{ maxWidth: 780, margin: "0 auto", padding: "20px 16px 60px" }}>
+
+      {/* 알림 권한 요청 배너 (허용 안 된 경우) */}
+      {notifPermission === "default" && alerts.alerts.length > 0 && (
+        <div style={{
+          background: `${T.pri}10`,
+          border: `1px solid ${T.pri}33`,
+          borderRadius: 12,
+          padding: "10px 16px",
+          marginBottom: 12,
+          display: "flex", alignItems: "center", gap: 10,
+        }}>
+          <span style={{ fontSize: 14 }}>🔔</span>
+          <span style={{ fontFamily: MO, fontSize: 12, color: T.tx2, flex: 1 }}>
+            알림을 받으려면 브라우저 알림을 허용하세요
+          </span>
+          <button
+            onClick={async () => {
+              const granted = await requestNotificationPermission();
+              setNotifPermission(granted ? "granted" : "denied");
+            }}
+            style={{
+              fontFamily: MO, fontSize: 12, color: T.pri,
+              background: `${T.pri}18`, border: `1px solid ${T.pri}44`,
+              borderRadius: 6, padding: "4px 10px", cursor: "pointer",
+            }}
+          >
+            허용
+          </button>
+        </div>
+      )}
 
       {/* 알림 발동 배너 */}
       {triggeredAlerts.length > 0 && !alertDismissed && (
@@ -275,81 +335,104 @@ export default function Dashboard() {
       )}
 
       {/* 헤더 */}
-      <div style={{ marginBottom: 28, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontFamily: FT, fontSize: 22, fontWeight: 800, letterSpacing: -0.5 }}>
-            Flow<span style={{ color: T.pri }}>Signal</span>
-          </span>
-          <div style={{ display: "flex", alignItems: "center", gap: 5, background: `${T.ok}18`, border: `1px solid ${T.ok}44`, borderRadius: 20, padding: "3px 10px" }}>
-            <LiveDot />
-            <span style={{ fontFamily: MO, fontSize: 11, color: T.ok }}>LIVE</span>
+      <div style={{ marginBottom: 20 }}>
+        {/* 로고 행 */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontFamily: FT, fontSize: 22, fontWeight: 800, letterSpacing: -0.5 }}>
+              Flow<span style={{ color: T.pri }}>Signal</span>
+            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, background: `${T.ok}18`, border: `1px solid ${T.ok}44`, borderRadius: 20, padding: "3px 10px" }}>
+              <LiveDot />
+              <span style={{ fontFamily: MO, fontSize: 11, color: T.ok }}>AI 분석 중</span>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {updatedStr && (
+              <span style={{ fontFamily: MO, fontSize: 11, color: T.tx2 }}>
+                {updatedStr} 기준
+              </span>
+            )}
+            <Link href="/portfolio" style={{
+              fontFamily: MO, fontSize: 12, color: T.tx2,
+              background: T.sf,
+              border: `1px solid ${T.bd}`,
+              borderRadius: 6, padding: "5px 12px",
+              textDecoration: "none", whiteSpace: "nowrap",
+            }}>
+              포트폴리오
+            </Link>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              style={{
+                fontFamily: MO, fontSize: 12,
+                color: refreshing ? T.tx2 : T.tx,
+                background: T.sf,
+                border: `1px solid ${T.bd}`,
+                borderRadius: 6, padding: "5px 12px",
+                cursor: refreshing ? "default" : "pointer",
+                transition: "all 0.15s",
+              }}
+            >
+              {refreshing ? "갱신 중…" : "↻ 새로고침"}
+            </button>
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {updatedStr && (
-            <span style={{ fontFamily: MO, fontSize: 11, color: T.tx2 }}>
-              {updatedStr} 기준
-            </span>
-          )}
-          <Link href="/portfolio" style={{
-            fontFamily: MO, fontSize: 12, color: T.pri,
-            background: `${T.pri}18`,
-            border: `1px solid ${T.pri}44`,
-            borderRadius: 6, padding: "5px 12px",
-            textDecoration: "none", whiteSpace: "nowrap",
-          }}>
-            📊 포트폴리오
-          </Link>
-          <Link href="/pricing" style={{
-            fontFamily: MO, fontSize: 12, color: T.wn,
-            background: `${T.wn}18`,
-            border: `1px solid ${T.wn}44`,
-            borderRadius: 6, padding: "5px 12px",
-            textDecoration: "none", whiteSpace: "nowrap",
-          }}>
-            ✦ 프리미엄
-          </Link>
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            style={{
-              fontFamily: MO,
-              fontSize: 12,
-              color: refreshing ? T.tx2 : T.pri,
-              background: "transparent",
-              border: `1px solid ${refreshing ? T.bd : T.pri}44`,
-              borderRadius: 6,
-              padding: "5px 12px",
-              cursor: refreshing ? "default" : "pointer",
-              transition: "all 0.15s",
-            }}
-          >
-            {refreshing ? "갱신 중..." : "↻ 새로고침"}
-          </button>
-        </div>
       </div>
 
-      {/* 시그널 피드 */}
+      {/* AI 시그널 피드 */}
       {topSignals.length > 0 && (
-        <div style={{
-          background: T.sf,
-          border: `1px solid ${T.bd}`,
-          borderRadius: 12,
-          padding: "14px 16px",
-          marginBottom: 20,
-        }}>
-          <div style={{ fontFamily: FT, fontSize: 12, fontWeight: 700, color: T.tx2, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
-            🔔 상위 시그널
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontFamily: MO, fontSize: 11, color: T.tx2, marginBottom: 8, letterSpacing: 0.3 }}>
+            ✦ FlowSignal AI가 실시간으로 분석하는 투자 시그널
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {topSignals.map((s, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontFamily: FT, fontSize: 12, color: T.tx }}>{s.name}</span>
-                <SignalBadge signal={s.signal} color={scoreColor(s.score)} />
-                <span style={{ fontFamily: MO, fontSize: 10, color: T.tx2 }}>{TAB_LABELS[s.market].split(" ")[0]}</span>
-              </div>
-            ))}
+          <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
+            {topSignals.map((s, i) => {
+              const color = scoreColor(s.score);
+              const marketEmoji = TAB_LABELS[s.market].split(" ")[0];
+              return (
+                <Link
+                  key={i}
+                  href={`/score/${s.market}/${encodeURIComponent(s.name)}`}
+                  style={{ textDecoration: "none", flexShrink: 0 }}
+                >
+                  <div style={{
+                    background: T.sf,
+                    border: `1px solid ${T.bd}`,
+                    borderRadius: 10,
+                    padding: "10px 14px",
+                    minWidth: 120,
+                    cursor: "pointer",
+                    transition: "border-color 0.15s",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
+                      <span style={{ fontSize: 11 }}>{marketEmoji}</span>
+                      <span style={{ fontFamily: MO, fontSize: 10, color: T.tx2 }}>
+                        {s.market === "kospi" ? "코스피" : s.market === "us" ? "미국" : "코인"}
+                      </span>
+                    </div>
+                    <div style={{ fontFamily: FT, fontSize: 13, fontWeight: 700, color: T.tx, marginBottom: 5, whiteSpace: "nowrap" }}>
+                      {s.name}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                      <span style={{
+                        fontFamily: MO, fontSize: 11,
+                        background: `${color}22`, color,
+                        borderRadius: 4, padding: "2px 7px",
+                        whiteSpace: "nowrap",
+                      }}>
+                        {s.signal}
+                      </span>
+                      <span style={{ fontFamily: MO, fontSize: 12, fontWeight: 700, color }}>
+                        {s.score}
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </div>
       )}
@@ -490,7 +573,13 @@ export default function Dashboard() {
           )}
           {!current.loading && !current.error && current.data.length > 0 && filteredData.length === 0 && (
             <div style={{ textAlign: "center", fontFamily: MO, fontSize: 13, color: T.tx2, padding: "40px 0" }}>
-              "{query}" 검색 결과 없음
+              <div>"{query}" 검색 결과 없음</div>
+              <Link
+                href={`/search?q=${encodeURIComponent(query)}`}
+                style={{ color: T.pri, fontSize: 12, marginTop: 8, display: "inline-block", textDecoration: "none" }}
+              >
+                전체 종목에서 검색 →
+              </Link>
             </div>
           )}
           {!current.loading && !current.error && current.data.length === 0 && (
@@ -502,8 +591,11 @@ export default function Dashboard() {
       )}
 
       {/* 푸터 */}
-      <div style={{ marginTop: 40, textAlign: "center", fontFamily: MO, fontSize: 11, color: T.tx2 }}>
-        FlowSignal은 투자 참고용 정보를 제공합니다. 투자 결정은 본인 책임입니다.
+      <div style={{ marginTop: 40, padding: "20px 16px", textAlign: "center", fontFamily: MO, fontSize: 11, color: T.tx2, borderTop: `1px solid ${T.bd}`, lineHeight: 1.8 }}>
+        <div style={{ marginBottom: 6, color: "#3FB950", fontSize: 10 }}>🚀 베타 기간 무료 서비스</div>
+        본 서비스는 베타 기간 무료로 제공되며, 정보 제공 목적의 데이터 서비스입니다.<br />
+        투자자문이나 투자권유가 아니며, 모든 투자 결정과 그에 따른 책임은 사용자 본인에게 있습니다.<br />
+        <span style={{ fontSize: 10 }}>FlowSignal © 2025 · 문의: dudurim88255-dev</span>
       </div>
 
       {/* 알림 설정 모달 */}

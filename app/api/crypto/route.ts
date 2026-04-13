@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { CRYPTO_COINS } from "@/lib/stocks";
-import { calculateFlowScore } from "@/lib/flowscore";
+import { evaluateSignals } from "@/lib/signals";
 import type { StockData } from "@/app/api/kospi/route";
 import { getRedis } from "@/lib/redis";
 
@@ -38,11 +38,6 @@ interface CoinGeckoMarket {
   sparkline_in_7d?: { price: number[] };
 }
 
-interface CoinGeckoChart {
-  prices: [number, number][];
-  total_volumes: [number, number][];
-}
-
 function fmtCrypto(n: number): string {
   if (n >= 1000) return `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
   if (n >= 1) return `$${n.toFixed(2)}`;
@@ -70,18 +65,8 @@ async function fetchCoinGeckoMarkets(): Promise<CoinGeckoMarket[]> {
   return res.json();
 }
 
-async function fetchCoinChart(id: string): Promise<CoinGeckoChart> {
-  const url = `${COINGECKO_BASE}/coins/${id}/market_chart?vs_currency=usd&days=90&interval=daily`;
-  const res = await fetch(url, {
-    headers: cgHeaders(),
-    next: { revalidate: 0 },
-  });
-  if (!res.ok) throw new Error(`CoinGecko chart ${id}: ${res.status}`);
-  return res.json();
-}
-
 export async function GET() {
-  const CACHE_KEY = "flowsignal:crypto:v1";
+  const CACHE_KEY = "flowsignal:crypto:v2";
 
   try {
     const cached = await getRedis().get<StockData[]>(CACHE_KEY);
@@ -93,57 +78,59 @@ export async function GET() {
   try {
     const markets = await fetchCoinGeckoMarkets();
 
+    // evaluateSignals는 CoinGecko 레이트리밋 고려해 순차 실행 (동시 5개)
     const stocks: StockData[] = await withConcurrency(
       markets.map((coin) => async () => {
         const def = CRYPTO_COINS.find((c) => c.symbol === coin.id);
 
-        let closes: number[] = [];
-        let volumes: number[] = [];
+        // 12시그널 점수는 evaluateSignals 파이프라인으로 통일
+        let evalScore = 50;
+        let evalLabel = "관망";
+        let evalSignals: string[] = [];
         try {
-          const chart = await fetchCoinChart(coin.id);
-          closes = chart.prices.map(([, p]) => p);
-          volumes = chart.total_volumes.map(([, v]) => v);
+          const evalResult = await evaluateSignals("crypto", coin.id);
+          evalScore = evalResult.score;
+          evalLabel = evalResult.label;
+          evalSignals = evalResult.signals.map((s) => s.name);
         } catch (e) {
-          console.warn(`[api/crypto] ${coin.id} 차트 조회 실패:`, e instanceof Error ? e.message : e);
-          // 스파크라인으로 대체
-          closes = coin.sparkline_in_7d?.price ?? [];
+          console.warn(`[api/crypto] ${coin.id} 시그널 계산 실패:`, e instanceof Error ? e.message : e);
         }
 
-        const flow = calculateFlowScore(closes, volumes);
-        const spark = (coin.sparkline_in_7d?.price ?? []).filter((_, i, a) =>
+        // 스파크라인: CoinGecko 마켓 API에서 제공하는 7일치 데이터 사용
+        const sparkRaw = coin.sparkline_in_7d?.price ?? [];
+        const spark = sparkRaw.filter((_: number, i: number, a: number[]) =>
           i % Math.max(1, Math.floor(a.length / 14)) === 0
         ).slice(0, 14);
 
         return {
           symbol: coin.symbol.toUpperCase(),
-          coinId: coin.id,   // CoinGecko ID — 상세 라우팅에 사용
+          coinId: coin.id,
           name: def?.name ?? coin.name,
           sector: def?.sector ?? "코인",
           market: "crypto" as const,
           price: coin.current_price,
           priceStr: fmtCrypto(coin.current_price),
           change1d: Math.round((coin.price_change_percentage_24h ?? 0) * 10) / 10,
-          p7d: Math.round((coin.price_change_percentage_7d_in_currency ?? flow.p7d) * 10) / 10,
-          p30d: Math.round((coin.price_change_percentage_30d_in_currency ?? flow.p30d) * 10) / 10,
+          p7d: Math.round((coin.price_change_percentage_7d_in_currency ?? 0) * 10) / 10,
+          p30d: Math.round((coin.price_change_percentage_30d_in_currency ?? 0) * 10) / 10,
           volume: coin.total_volume,
           marketCap: coin.market_cap,
-          volRatio: flow.volRatio,
-          rsi: flow.rsi,
-          score: flow.score,
-          grade: flow.grade,
-          signals: flow.signals,
+          volRatio: 1,
+          rsi: 50,
+          score: evalScore,
+          grade: evalLabel,
+          signals: evalSignals,
           spark,
         };
       }),
-      5  // 동시 최대 5개 요청
+      5  // 동시 최대 5개 요청 (CoinGecko 레이트리밋)
     );
 
     const sorted = stocks.sort((a, b) => b.score - a.score);
-
     console.info(`[api/crypto] 조회 완료: ${sorted.length}개`);
 
     try {
-      await getRedis().set(CACHE_KEY, sorted, { ex: 1800 });
+      await getRedis().set(CACHE_KEY, sorted, { ex: 900 }); // 15분 TTL
     } catch (e) {
       console.warn("[api/crypto] Redis 캐시 저장 실패:", e instanceof Error ? e.message : e);
     }
@@ -151,7 +138,6 @@ export async function GET() {
     return NextResponse.json({ stocks: sorted, cached: false });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    // 레이트 리밋(429)은 잠시 후 재시도 안내, 500 대신 빈 결과 반환
     if (message.includes("429")) {
       console.warn("[api/crypto] CoinGecko 레이트 리밋 — 잠시 후 재시도");
       return NextResponse.json({ stocks: [], cached: false, rateLimited: true });
