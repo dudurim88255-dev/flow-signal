@@ -85,9 +85,8 @@ async function harvestOne(
     const riskResult = runRiskGate({
       evaluatedAt: now,
       signals: result.signals,
-      // 거래량: EvalResult에 포함되지 않음 → 1:1 비율로 항상 통과 (TODO: fetcher에서 보완)
-      recentVolume: 1,
-      avgVolume30d: 1,
+      recentVolume: result.recentVolume,
+      avgVolume30d: result.avgVolume30d,
       recentRegimes: riskData.recentRegimes,
       wfResult: riskData.wfResult,
       verifiedPredictionCount: riskData.verifiedCount,

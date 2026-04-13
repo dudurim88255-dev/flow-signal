@@ -35,7 +35,9 @@ export type EvalResult = {
   ret7d: number;   // 7일 수익률 (소수, e.g. 0.05 = +5%)
   ret30d: number;  // 30일 수익률
   spark: number[]; // 최근 14일 종가 (스파크라인)
-  regime?: string; // v4: bull | bear | chop (레짐 인식 가중치 적용 시 설정됨)
+  recentVolume: number;  // v4: 최근 1일 거래량 (리스크 게이트용)
+  avgVolume30d: number;  // v4: 30일 평균 거래량
+  regime?: string;       // v4: bull | bear | chop (레짐 인식 가중치 적용 시 설정됨)
 };
 
 export type StepCallback = (signal: SignalScore) => void;
@@ -214,6 +216,8 @@ async function evaluateCrypto(meta: TickerMeta, onStep?: StepCallback): Promise<
     ret7d: returnPct(data.closes, 7),
     ret30d: returnPct(data.closes, 30),
     spark: data.closes.slice(-14),
+    recentVolume: data.volumes[data.volumes.length - 1] ?? 0,
+    avgVolume30d: data.volumes.slice(-31, -1).reduce((s, v) => s + v, 0) / Math.max(data.volumes.slice(-31, -1).length, 1),
   };
 }
 
@@ -274,6 +278,8 @@ async function evaluateKorea(meta: TickerMeta, onStep?: StepCallback): Promise<E
     ret7d: returnPct(data.closes, 7),
     ret30d: returnPct(data.closes, 30),
     spark: data.closes.slice(-14),
+    recentVolume: data.volumes[data.volumes.length - 1] ?? 0,
+    avgVolume30d: data.volumes.slice(-31, -1).reduce((s, v) => s + v, 0) / Math.max(data.volumes.slice(-31, -1).length, 1),
   };
 }
 
@@ -323,6 +329,8 @@ async function evaluateUS(meta: TickerMeta, onStep?: StepCallback): Promise<Eval
     ret7d: returnPct(data.closes, 7),
     ret30d: returnPct(data.closes, 30),
     spark: data.closes.slice(-14),
+    recentVolume: data.volumes[data.volumes.length - 1] ?? 0,
+    avgVolume30d: data.volumes.slice(-31, -1).reduce((s, v) => s + v, 0) / Math.max(data.volumes.slice(-31, -1).length, 1),
   };
 }
 
