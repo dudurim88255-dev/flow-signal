@@ -37,7 +37,7 @@ export type CryptoFetchResult = {
   shortLiq24h: number;          // C13: 24h 숏 청산 (USD)
 };
 
-/** CoinGecko 시장 데이터 (30일 OHLCV + 메타) */
+/** CoinGecko 시장 데이터 (90일 OHLCV + 메타) */
 async function fetchCoinGeckoOhlcv(coinId: string): Promise<{
   closes: number[];
   volumes: number[];
@@ -50,10 +50,14 @@ async function fetchCoinGeckoOhlcv(coinId: string): Promise<{
   const ohlcUrl = `https://api.coingecko.com/api/v3/coins/${coinId}/ohlc?vs_currency=usd&days=90`;
   // 시장 정보
   const marketUrl = `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${coinId}&sparkline=false`;
+  // 실제 일별 거래량 — market_chart (days=31, interval=daily)
+  // 응답: { total_volumes: [[timestamp, volume], ...] }
+  const volumeUrl = `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=31&interval=daily`;
 
-  const [ohlcData, marketData] = await Promise.all([
+  const [ohlcData, marketData, chartData] = await Promise.all([
     fetchJson(ohlcUrl),
     fetchJson(marketUrl),
+    fetchJson(volumeUrl).catch(() => null), // 실패 시 fallback
   ]);
 
   // ohlcData: [[timestamp, open, high, low, close], ...]
@@ -61,9 +65,20 @@ async function fetchCoinGeckoOhlcv(coinId: string): Promise<{
   const highs = ohlcData.map((d: number[]) => d[2]);
   const lows = ohlcData.map((d: number[]) => d[3]);
 
-  // 거래량은 별도 chart API 필요 (ohlc에는 없음) — 근사값으로 시장데이터 total_volume 사용
-  const vol24h = marketData[0]?.total_volume ?? 0;
-  const volumes = closes.map((_: number, i: number) => (i === closes.length - 1 ? vol24h : vol24h * (0.8 + Math.random() * 0.4)));
+  // market_chart의 일별 실제 거래량 사용
+  // closes(90일)보다 짧으므로 앞을 최신 거래량 평균으로 채움
+  let volumes: number[];
+  const chartVolumes: number[] = chartData?.total_volumes?.map((v: number[]) => v[1]) ?? [];
+  if (chartVolumes.length > 0) {
+    const avgVol = chartVolumes.reduce((s: number, v: number) => s + v, 0) / chartVolumes.length;
+    // closes 길이에 맞게 앞부분은 평균으로 패딩, 뒷부분은 실제값
+    const padLen = Math.max(0, closes.length - chartVolumes.length);
+    volumes = [...Array(padLen).fill(avgVol), ...chartVolumes];
+  } else {
+    // chart API 실패 시 markets total_volume으로 fallback (구버전 동작)
+    const vol24h = marketData[0]?.total_volume ?? 0;
+    volumes = closes.map((_: number, i: number) => (i === closes.length - 1 ? vol24h : vol24h * (0.8 + Math.random() * 0.4)));
+  }
 
   return {
     closes,
