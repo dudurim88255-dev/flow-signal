@@ -602,6 +602,8 @@ export default function ScorePage() {
   const gotResultRef = useRef(false);
 
   useEffect(() => {
+    let cancelled = false;
+
     setSignals([]);
     setVisibleIds(new Set());
     setResult(null);
@@ -614,6 +616,7 @@ export default function ScorePage() {
     esRef.current = es;
 
     es.addEventListener("signal", (e) => {
+      if (cancelled) return;
       const signal: SignalScore = JSON.parse(e.data);
       setSignals((prev) => [...prev, signal]);
       setTimeout(() => {
@@ -622,6 +625,7 @@ export default function ScorePage() {
     });
 
     es.addEventListener("result", (e) => {
+      if (cancelled) return;
       const data: ResultMeta = JSON.parse(e.data);
       gotResultRef.current = true;
       setResult(data);
@@ -631,6 +635,7 @@ export default function ScorePage() {
     });
 
     es.addEventListener("error", (e) => {
+      if (cancelled) return;
       // result 수신 후 스트림 종료 시 발생하는 이벤트 → 무시
       if (gotResultRef.current) { es.close(); return; }
       // 네이티브 EventSource 오류는 data가 없음 → 무시
@@ -647,6 +652,7 @@ export default function ScorePage() {
     });
 
     es.onerror = () => {
+      if (cancelled) return;
       // result를 이미 받은 후의 onerror는 정상 종료 → 무시
       if (gotResultRef.current) { es.close(); return; }
       if (es.readyState === EventSource.CLOSED) return;
@@ -655,7 +661,10 @@ export default function ScorePage() {
       es.close();
     };
 
-    return () => es.close();
+    return () => {
+      cancelled = true;
+      es.close();
+    };
   }, [market, ticker]);
 
   const marketLabel =
