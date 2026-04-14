@@ -54,6 +54,14 @@ export async function GET(
 
   const stream = new ReadableStream({
     async start(controller) {
+      let isClosed = false;
+      const safeClose = () => {
+        if (!isClosed) {
+          isClosed = true;
+          controller.close();
+        }
+      };
+
       const enqueue = (type: string, data: unknown) => {
         try {
           controller.enqueue(new TextEncoder().encode(sseEvent(type, data)));
@@ -87,7 +95,7 @@ export async function GET(
             name: parsed.name ?? "",
             cached: true,
           });
-          controller.close();
+          safeClose();
           return;
         }
 
@@ -149,7 +157,7 @@ export async function GET(
         console.error(`[score] ${market}/${ticker} 평가 실패:`, err);
         enqueue("error", { message: err instanceof Error ? err.message : "평가 중 오류 발생" });
       } finally {
-        controller.close();
+        safeClose();
       }
     },
   });
