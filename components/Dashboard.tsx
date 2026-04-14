@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { T, FT, MO, scoreColor, changeColor } from "@/lib/theme";
 import type { StockData } from "@/app/api/kospi/route";
+import { toScoreRouteFromData } from "@/lib/routes";
 import StockRow from "./StockRow";
 import SectorHeatmap from "./SectorHeatmap";
 import AlertModal from "./AlertModal";
@@ -107,11 +108,11 @@ function ErrorBox({ msg }: { msg: string }) {
 
 // 전체 시장에서 상위 시그널 수집
 function collectTopSignals(markets: Record<Exclude<Tab, "watchlist">, MarketState>) {
-  const result: { name: string; signal: string; score: number; market: Exclude<Tab, "watchlist"> }[] = [];
+  const result: { name: string; signal: string; score: number; market: Exclude<Tab, "watchlist">; symbol: string; coinId?: string }[] = [];
   for (const tab of ["kospi", "us", "crypto"] as Exclude<Tab, "watchlist">[]) {
     for (const stock of markets[tab].data.slice(0, 5)) {
       for (const sig of stock.signals.slice(0, 1)) {
-        result.push({ name: stock.name, signal: sig, score: stock.score, market: tab });
+        result.push({ name: stock.name, signal: sig, score: stock.score, market: tab, symbol: stock.symbol, coinId: stock.coinId });
       }
     }
   }
@@ -395,7 +396,7 @@ export default function Dashboard() {
               return (
                 <Link
                   key={i}
-                  href={`/score/${s.market}/${encodeURIComponent(s.name)}`}
+                  href={toScoreRouteFromData({ symbol: s.symbol, coinId: s.coinId, market: s.market })}
                   style={{ textDecoration: "none", flexShrink: 0 }}
                 >
                   <div style={{
