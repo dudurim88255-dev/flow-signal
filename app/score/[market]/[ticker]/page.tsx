@@ -602,6 +602,8 @@ export default function ScorePage() {
   const gotResultRef = useRef(false);
 
   useEffect(() => {
+    if (!market || !ticker) return;
+
     let cancelled = false;
 
     setSignals([]);
@@ -634,16 +636,16 @@ export default function ScorePage() {
       setTimeout(() => setGaugeAnim(true), 100);
     });
 
+    // 서버가 보낸 커스텀 error 이벤트 (data 있음) — 서버측 평가 실패
     es.addEventListener("error", (e) => {
       if (cancelled) return;
-      // result 수신 후 스트림 종료 시 발생하는 이벤트 → 무시
       if (gotResultRef.current) { es.close(); return; }
-      // 네이티브 EventSource 오류는 data가 없음 → 무시
       const raw = (e as MessageEvent).data;
+      // data 없는 native 연결 오류는 onerror에서 처리
       if (raw == null) return;
       try {
-        const data = JSON.parse(raw);
-        setError(data.message ?? "평가 중 오류가 발생했습니다");
+        const payload = JSON.parse(raw);
+        setError(payload.message ?? "평가 중 오류가 발생했습니다");
       } catch {
         setError("평가 중 오류가 발생했습니다");
       }
@@ -651,10 +653,12 @@ export default function ScorePage() {
       es.close();
     });
 
-    es.onerror = () => {
+    // native 연결 오류 (data 없음) — 네트워크/서버 연결 문제
+    es.onerror = (e) => {
       if (cancelled) return;
-      // result를 이미 받은 후의 onerror는 정상 종료 → 무시
       if (gotResultRef.current) { es.close(); return; }
+      // data가 있으면 커스텀 error 이벤트 — 위 addEventListener에서 처리됨
+      if ((e as MessageEvent).data != null) return;
       if (es.readyState === EventSource.CLOSED) return;
       setError("연결이 끊어졌습니다. 새로고침해 주세요.");
       setLoading(false);
