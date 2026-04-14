@@ -212,13 +212,22 @@ export async function fetchKoreaData(yahooSymbol: string): Promise<KoreaFetchRes
   const start = new Date();
   start.setDate(start.getDate() - 120);
 
-  const result = await yahooFinance.historical(yahooSymbol, {
+  // historical()은 내부적으로 chart() 래퍼이며, KOSPI 데이터에서
+  // 일부 필드만 null인 row가 섞일 경우 unconditional throw 발생.
+  // (validateResult 옵션으로 우회 불가 — throw가 해당 체크 이전에 위치)
+  // chart()를 직접 호출해 null 필터링을 직접 제어한다.
+  const chartResult = await yahooFinance.chart(yahooSymbol, {
     period1: start,
     period2: end,
     interval: "1d",
   });
 
-  const sorted = result.sort((a: { date: Date }, b: { date: Date }) => a.date.getTime() - b.date.getTime());
+  const sorted = (chartResult.quotes ?? [])
+    .filter((q: { open: number | null; high: number | null; low: number | null; close: number | null }) =>
+      q.close != null && q.high != null && q.low != null && q.open != null
+    )
+    .sort((a: { date: Date }, b: { date: Date }) => a.date.getTime() - b.date.getTime());
+
   const closes = sorted.map((d: { close: number }) => d.close);
   const volumes = sorted.map((d: { volume: number }) => d.volume ?? 0);
   const highs = sorted.map((d: { high: number }) => d.high);
