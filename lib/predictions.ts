@@ -24,6 +24,7 @@ export type Prediction = {
   outcome14d?: "correct" | "wrong" | "pending" | "neutral";
   verifiedAt?: string;
   scoreVersion?: string; // 'v3.1' = live-only 가중합 (v3.1 이전은 undefined/'v3.0')
+  risk_flags?: string[];  // Risk Gate 실패 체크 목록. undefined = 통과, 배열 = 페널티 모드 플래그
 };
 
 export type MarketWeights = Record<string, number>;  // { C1: 12, C2: 12, ... }
