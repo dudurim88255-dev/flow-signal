@@ -49,6 +49,7 @@ type ResultMeta = {
   spark: number[];
   name: string;
   cached: boolean;
+  risk_flags?: string[];  // Risk Gate 실패 체크 목록 (undefined = 통과)
 };
 
 // ─── 시그널 그룹 정의 ────────────────────────────────────────────────────────
@@ -774,6 +775,14 @@ export default function ScorePage() {
               </div>
               <div className="flex items-center gap-2">
                 {result.cached && <span className="text-gray-400">캐시됨</span>}
+                {result.risk_flags?.map((flag) => (
+                  <span
+                    key={flag}
+                    className="text-[10px] px-1.5 py-0.5 bg-orange-950 border border-orange-900 text-orange-400 rounded font-semibold"
+                  >
+                    ⚠ {flag}
+                  </span>
+                ))}
                 <span className={`text-xs px-2 py-0.5 rounded-md border font-semibold ${scoreToBg(result.score)}`}>
                   {result.label}
                 </span>
