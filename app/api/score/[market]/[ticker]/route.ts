@@ -12,9 +12,7 @@ import { NextRequest } from "next/server";
 import { evaluateSignals, type Market } from "@/lib/signals/index";
 import { type SignalScore } from "@/lib/signals/crypto";
 import { getRedis } from "@/lib/redis";
-import { savePrediction, today, type Market as PredMarket } from "@/lib/predictions";
-import { runRiskGate } from "@/lib/signals/riskgate";
-import { loadRiskGateData } from "@/lib/signals/riskgate-loader";
+import { savePrediction, today } from "@/lib/predictions";
 
 export const runtime = "nodejs";
 
@@ -96,7 +94,6 @@ export async function GET(
             spark: parsed.spark ?? [],
             name: parsed.name ?? "",
             cached: true,
-            risk_flags: parsed.risk_flags ?? undefined,
           });
           safeClose();
           return;
@@ -112,23 +109,10 @@ export async function GET(
 
         const confidence = calcConfidence(result.signals);
 
-        // Risk Gate — 신호 평가 후 적용, 점수 차단 없이 플래그만 기록
-        const riskData = await loadRiskGateData(market as PredMarket);
-        const riskResult = runRiskGate({
-          evaluatedAt: result.evaluatedAt,
-          signals: result.signals,
-          recentVolume: result.recentVolume,
-          avgVolume30d: result.avgVolume30d,
-          recentRegimes: riskData.recentRegimes,
-          wfResult: riskData.wfResult,
-          verifiedPredictionCount: riskData.verifiedCount,
-        });
-        const riskFlags = riskResult.failedChecks.length > 0 ? riskResult.failedChecks : undefined;
-
-        // 캐시 저장 (modelVersion + confidence + risk_flags 포함)
+        // 캐시 저장 (modelVersion + confidence 포함)
         await redis.set(
           cacheKey,
-          JSON.stringify({ ...result, modelVersion: MODEL_VERSION, confidence, risk_flags: riskFlags }),
+          JSON.stringify({ ...result, modelVersion: MODEL_VERSION, confidence }),
           { ex: CACHE_TTL_SEC }
         );
 
@@ -150,7 +134,6 @@ export async function GET(
           outcome5d: "pending",
           outcome14d: "pending",
           scoreVersion: "v3.1",
-          risk_flags: riskFlags,
         }).catch((err) =>
           console.warn(`[score] 예측 저장 실패 ${market}/${ticker}:`, err instanceof Error ? err.message : err)
         );
@@ -169,7 +152,6 @@ export async function GET(
           spark: result.spark,
           name: result.name,
           cached: false,
-          risk_flags: riskFlags,
         });
       } catch (err) {
         console.error(`[score] ${market}/${ticker} 평가 실패:`, err);

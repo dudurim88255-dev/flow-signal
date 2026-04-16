@@ -4,15 +4,16 @@
  * Vercel Cron: 매일 01:00 UTC
  *
  * v4: 신호 발행 전 6가지 리스크 게이트 체크
- *   실패 시 → 원본 score/label 유지 + risk_flags에 실패 체크 기록 (페널티 모드)
+ *   실패 시 → score=50(neutral), label="리스크차단"으로 저장 (예측 억제)
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { evaluateSignals, type Market } from "@/lib/signals/index";
-import { savePrediction, today, type Market as PredMarket } from "@/lib/predictions";
+import { savePrediction, today, getAllPredictions, type Market as PredMarket } from "@/lib/predictions";
 import { KOSPI_STOCKS, US_STOCKS, CRYPTO_COINS } from "@/lib/stocks";
 import { runRiskGate } from "@/lib/signals/riskgate";
-import { loadRiskGateData, type MarketRiskData } from "@/lib/signals/riskgate-loader";
+import { getHistoricalRegime, type Regime } from "@/lib/signals/regime";
+import { getWalkforwardResult, type WalkforwardResult } from "@/lib/signals/walkforward";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // Vercel Pro 최대 5분
@@ -30,6 +31,43 @@ const HARVEST_TARGETS: Array<{ market: PredMarket; ticker: string; name: string 
   // 미국 상위 10
   ...US_STOCKS.slice(0, 10).map((s) => ({ market: "us" as PredMarket, ticker: s.symbol, name: s.name })),
 ];
+
+// ─── 리스크 게이트 사전 데이터 로드 ─────────────────────────────────────────
+
+type MarketRiskData = {
+  recentRegimes: Regime[];
+  wfResult: WalkforwardResult | null;
+  verifiedCount: number;
+};
+
+/**
+ * 시장별 리스크 게이트 입력 데이터를 한 번에 로드 (종목별 반복 조회 방지)
+ * - 최근 3일 레짐 이력 (Redis)
+ * - Walk-forward 결과 (Redis)
+ * - 검증된 예측 수 (Redis)
+ */
+async function loadRiskGateData(market: PredMarket): Promise<MarketRiskData> {
+  const now = new Date();
+  // 최근 3일: [2일전, 1일전, 오늘]
+  const dates = [2, 1, 0].map((n) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() - n);
+    return d.toISOString().slice(0, 10);
+  });
+
+  const [regimeResults, wfResult, allPreds] = await Promise.all([
+    Promise.all(dates.map((d) => getHistoricalRegime(market, d))),
+    getWalkforwardResult(market),
+    getAllPredictions(market),
+  ]);
+
+  const recentRegimes = regimeResults.filter((r): r is Regime => r !== null);
+  const verifiedCount = allPreds.filter(
+    (p) => p.outcome14d === "correct" || p.outcome14d === "wrong"
+  ).length;
+
+  return { recentRegimes, wfResult, verifiedCount };
+}
 
 // ─── 종목별 수집 ──────────────────────────────────────────────────────────────
 
@@ -54,12 +92,12 @@ async function harvestOne(
       verifiedPredictionCount: riskData.verifiedCount,
     });
 
-    // 페널티 모드: 게이트 실패 시 원본 점수/레이블 유지, risk_flags에 실패 체크 기록
-    // (이전 차단 모드는 score=50→neutral→verifiedCount 증가 불가 데드락 유발)
-    const riskFlags = riskResult.failedChecks.length > 0 ? riskResult.failedChecks : undefined;
+    // 게이트 실패 시 점수 50(중립), 레이블 "리스크차단"으로 억제
+    const finalScore = riskResult.pass ? result.score : 50;
+    const finalLabel = riskResult.pass ? result.label : "리스크차단";
 
-    if (riskFlags) {
-      console.log(`[harvest] ${market}/${ticker} 리스크 페널티: ${riskFlags.join(", ")}`);
+    if (!riskResult.pass) {
+      console.log(`[harvest] ${market}/${ticker} 리스크차단: ${riskResult.failedChecks.join(", ")}`);
     }
 
     await savePrediction({
@@ -67,8 +105,8 @@ async function harvestOne(
       ticker,
       name,
       date: today(),
-      score: result.score,
-      label: result.label,
+      score: finalScore,
+      label: finalLabel,
       signals: result.signals.map((s) => ({
         id: s.id,
         score: s.score,
@@ -79,14 +117,13 @@ async function harvestOne(
       outcome5d: "pending",
       outcome14d: "pending",
       scoreVersion: "v3.1",
-      risk_flags: riskFlags,
     });
 
     return {
       ticker,
-      score: result.score,
-      label: result.label,
-      riskPenalty: !!riskFlags,
+      score: finalScore,
+      label: finalLabel,
+      riskBlocked: !riskResult.pass,
       failedChecks: riskResult.failedChecks,
       ok: true,
     };
@@ -135,14 +172,14 @@ export async function GET(req: NextRequest) {
   }
 
   const succeeded = results.filter((r) => r.ok).length;
-  const riskPenalty = results.filter((r) => r.ok && (r as { riskPenalty?: boolean }).riskPenalty).length;
-  console.log(`[harvest] 완료 — ${succeeded}/${HARVEST_TARGETS.length} 성공 (리스크 페널티: ${riskPenalty}개)`);
+  const riskBlocked = results.filter((r) => r.ok && (r as { riskBlocked?: boolean }).riskBlocked).length;
+  console.log(`[harvest] 완료 — ${succeeded}/${HARVEST_TARGETS.length} 성공 (리스크차단: ${riskBlocked}개)`);
 
   return NextResponse.json({
     date: dateStr,
     total: HARVEST_TARGETS.length,
     succeeded,
-    riskPenalty,
+    riskBlocked,
     failed: HARVEST_TARGETS.length - succeeded,
   });
 }
