@@ -6,6 +6,7 @@
  */
 
 import { getRedis } from "./redis";
+import type { ConfidenceLabel } from "./signals/types";
 
 export type Market = "crypto" | "korea" | "us";
 
@@ -25,6 +26,9 @@ export type Prediction = {
   verifiedAt?: string;
   scoreVersion?: string; // 'v3.1' = live-only 가중합 (v3.1 이전은 undefined/'v3.0')
   risk_flags?: string[];  // Risk Gate 실패 체크 목록. undefined = 통과, 배열 = 페널티 모드 플래그
+  // Phase A P0 (2026-04-24): confidence 두 필드 분리
+  confidenceScore?: number;         // 0~100, stddev 기반. Dashboard UI에서 표시.
+  confidenceLabel?: ConfidenceLabel; // Risk Gate 로그 / MEMORY / 내러티브 등 텍스트 경로용.
 };
 
 export type MarketWeights = Record<string, number>;  // { C1: 12, C2: 12, ... }

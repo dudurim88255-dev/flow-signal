@@ -15,6 +15,7 @@ import { getRedis } from "@/lib/redis";
 import { savePrediction, today, type Market as PredMarket } from "@/lib/predictions";
 import { runRiskGate } from "@/lib/signals/riskgate";
 import { loadRiskGateData } from "@/lib/signals/riskgate-loader";
+import { confidenceScoreToLabel } from "@/lib/signals/types";
 
 export const runtime = "nodejs";
 
@@ -82,6 +83,14 @@ export async function GET(
           for (const signal of parsed.signals as SignalScore[]) {
             enqueue("signal", signal);
           }
+          // Phase A P0: 캐시 히트 시에도 두 필드로 전송.
+          //   - parsed.confidenceScore 없으면 legacy 숫자 필드(parsed.confidence)에서 폴백,
+          //     그것도 없으면 50(neutral).
+          //   - parsed.confidenceLabel 없으면 score에서 재계산.
+          const cachedScore = typeof parsed.confidenceScore === "number"
+            ? parsed.confidenceScore
+            : (typeof parsed.confidence === "number" ? parsed.confidence : 50);
+          const cachedLabel = parsed.confidenceLabel ?? confidenceScoreToLabel(cachedScore);
           enqueue("result", {
             score: parsed.score,
             label: parsed.label,
@@ -89,7 +98,8 @@ export async function GET(
             totalCount: parsed.totalCount,
             evaluatedAt: parsed.evaluatedAt,
             modelVersion: parsed.modelVersion ?? MODEL_VERSION,
-            confidence: parsed.confidence ?? 50,
+            confidenceScore: cachedScore,
+            confidenceLabel: cachedLabel,
             price: parsed.price ?? 0,
             ret7d: parsed.ret7d != null ? Math.round(parsed.ret7d * 1000) / 10 : null,
             ret30d: parsed.ret30d != null ? Math.round(parsed.ret30d * 1000) / 10 : null,
@@ -110,7 +120,11 @@ export async function GET(
           enqueue("signal", signal);
         });
 
-        const confidence = calcConfidence(result.signals);
+        // Phase A P0: 두 필드 분리
+        //   confidenceScore  = stddev 기반 숫자 (Dashboard UI용)
+        //   confidenceLabel  = score 구간 매핑 (Risk Gate 로그 / MEMORY / 내러티브)
+        const confidenceScore = calcConfidence(result.signals);
+        const confidenceLabel = confidenceScoreToLabel(confidenceScore);
 
         // Risk Gate — 신호 평가 후 적용, 점수 차단 없이 플래그만 기록
         const riskData = await loadRiskGateData(market as PredMarket);
@@ -125,10 +139,18 @@ export async function GET(
         });
         const riskFlags = riskResult.failedChecks.length > 0 ? riskResult.failedChecks : undefined;
 
-        // 캐시 저장 (modelVersion + confidence + risk_flags 포함)
+        // 캐시 저장 (modelVersion + confidence{Score,Label} + risk_flags 포함)
+        // WHY: Phase A P0 이전에는 `confidence` 단일 키에 숫자를 덮어써 문자열 라벨이 유실됐음.
+        //      새 키 confidenceScore/confidenceLabel로 분리해 EvalResult.coverageLabel 과 충돌 없음.
         await redis.set(
           cacheKey,
-          JSON.stringify({ ...result, modelVersion: MODEL_VERSION, confidence, risk_flags: riskFlags }),
+          JSON.stringify({
+            ...result,
+            modelVersion: MODEL_VERSION,
+            confidenceScore,
+            confidenceLabel,
+            risk_flags: riskFlags,
+          }),
           { ex: CACHE_TTL_SEC }
         );
 
@@ -151,6 +173,8 @@ export async function GET(
           outcome14d: "pending",
           scoreVersion: "v3.1",
           risk_flags: riskFlags,
+          confidenceScore,
+          confidenceLabel,
         }).catch((err) =>
           console.warn(`[score] 예측 저장 실패 ${market}/${ticker}:`, err instanceof Error ? err.message : err)
         );
@@ -162,7 +186,8 @@ export async function GET(
           totalCount: result.totalCount,
           evaluatedAt: result.evaluatedAt,
           modelVersion: MODEL_VERSION,
-          confidence,
+          confidenceScore,
+          confidenceLabel,
           price: result.price,
           ret7d: Math.round(result.ret7d * 1000) / 10,
           ret30d: Math.round(result.ret30d * 1000) / 10,

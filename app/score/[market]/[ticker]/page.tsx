@@ -42,7 +42,11 @@ type ResultMeta = {
   totalCount: number;
   evaluatedAt: string;
   modelVersion: string;
-  confidence: number;
+  // Phase A P0: confidence 두 필드 분리.
+  //   confidenceScore (0~100) — UI에 그대로 표시
+  //   confidenceLabel — 텍스트 경로용 (옵션, UI 미사용)
+  confidenceScore: number;
+  confidenceLabel?: "high" | "med" | "low";
   price: number;
   ret7d: number | null;
   ret30d: number | null;
@@ -767,7 +771,7 @@ export default function ScorePage() {
             <div className="px-5 py-3 bg-gray-900 border-t border-gray-800 flex items-center justify-between text-xs text-gray-500">
               <div className="flex items-center gap-3">
                 <span>
-                  신뢰도 <span className="text-gray-200 font-bold">{result.confidence}%</span>
+                  신뢰도 <span className="text-gray-200 font-bold">{result.confidenceScore}%</span>
                 </span>
                 <span>
                   실시간 <span className="text-gray-200 font-bold">{result.liveCount}/{result.totalCount}</span>

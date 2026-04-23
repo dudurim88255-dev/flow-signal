@@ -18,6 +18,7 @@ import { returnPct } from "./compute";
 import { CRYPTO_COINS, KOSPI_STOCKS, KOSDAQ_STOCKS, US_STOCKS } from "../stocks";
 import { getRegimeWeights } from "../predictions";
 import { getCurrentRegime } from "./regime";
+import type { CoverageLabel } from "./types";
 
 export type Market = "crypto" | "korea" | "us";
 
@@ -38,8 +39,13 @@ export type EvalResult = {
   recentVolume: number;  // v4: 최근 1일 거래량 (리스크 게이트용)
   avgVolume30d: number;  // v4: 30일 평균 거래량
   regime?: string;       // v4: bull | bear | chop (레짐 인식 가중치 적용 시 설정됨)
-  confidence: 'high' | 'medium' | 'low'; // v3.1: live 신호 커버리지 기반 신뢰도
-  confidence_reason: string;             // v3.1: 신뢰도 근거 (low일 때 커버리지 % 표시)
+  // WHY rename (Phase A P0, 2026-04-24):
+  //   기존 `confidence`/`confidence_reason`은 route.ts의 calcConfidence() 숫자 값과
+  //   JSON.stringify 시점에 동일 키로 충돌해 항상 숫자가 덮어씌워졌음.
+  //   → coverage-based 라벨은 `coverageLabel`/`coverageReason`으로 분리,
+  //     score-based 숫자/라벨은 route.ts에서 confidenceScore/confidenceLabel로 별도 주입.
+  coverageLabel: CoverageLabel;  // live 신호 커버리지(%) 기반 라벨
+  coverageReason: string;        // 라벨 근거 (예: "신호 커버리지 50%")
 };
 
 export type StepCallback = (signal: SignalScore) => void;
@@ -220,8 +226,8 @@ async function evaluateCrypto(meta: TickerMeta, onStep?: StepCallback): Promise<
     spark: data.closes.slice(-14),
     recentVolume: data.volumes[data.volumes.length - 1] ?? 0,
     avgVolume30d: data.volumes.slice(-31, -1).reduce((s, v) => s + v, 0) / Math.max(data.volumes.slice(-31, -1).length, 1),
-    confidence: 'high' as const,
-    confidence_reason: '',
+    coverageLabel: 'high' as const,
+    coverageReason: '',
   };
 }
 
@@ -284,8 +290,8 @@ async function evaluateKorea(meta: TickerMeta, onStep?: StepCallback): Promise<E
     spark: data.closes.slice(-14),
     recentVolume: data.volumes[data.volumes.length - 1] ?? 0,
     avgVolume30d: data.volumes.slice(-31, -1).reduce((s, v) => s + v, 0) / Math.max(data.volumes.slice(-31, -1).length, 1),
-    confidence: 'high' as const,
-    confidence_reason: '',
+    coverageLabel: 'high' as const,
+    coverageReason: '',
   };
 }
 
@@ -337,8 +343,8 @@ async function evaluateUS(meta: TickerMeta, onStep?: StepCallback): Promise<Eval
     spark: data.closes.slice(-14),
     recentVolume: data.volumes[data.volumes.length - 1] ?? 0,
     avgVolume30d: data.volumes.slice(-31, -1).reduce((s, v) => s + v, 0) / Math.max(data.volumes.slice(-31, -1).length, 1),
-    confidence: 'high' as const,
-    confidence_reason: '',
+    coverageLabel: 'high' as const,
+    coverageReason: '',
   };
 }
 
@@ -390,21 +396,13 @@ export async function evaluateSignals(
   const liveW  = result.signals.filter((x) => x.live).reduce((s, x) => s + x.weight, 0);
   const coverage = totalW > 0 ? Math.round((liveW / totalW) * 100) : 0;
 
-  let confidence: 'high' | 'medium' | 'low';
-  let confidence_reason: string;
-  if (coverage >= 70) {
-    confidence = 'high';
-    confidence_reason = `신호 커버리지 ${coverage}%`;
-  } else if (coverage >= 50) {
-    confidence = 'medium';
-    confidence_reason = `신호 커버리지 ${coverage}%`;
-  } else {
-    confidence = 'low';
-    confidence_reason = `신호 커버리지 ${coverage}%`;
-  }
+  let coverageLabel: CoverageLabel;
+  if (coverage >= 70) coverageLabel = 'high';
+  else if (coverage >= 50) coverageLabel = 'medium';
+  else coverageLabel = 'low';
 
-  result.confidence = confidence;
-  result.confidence_reason = confidence_reason;
+  result.coverageLabel = coverageLabel;
+  result.coverageReason = `신호 커버리지 ${coverage}%`;
 
   return result;
 }
