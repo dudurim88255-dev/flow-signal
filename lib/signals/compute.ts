@@ -3,6 +3,8 @@
  * RSI(Wilder), MACD(12/26/9), Volume Z, A/D line, OBV, MA, 선형회귀 기울기
  */
 
+import { calcReturnNd } from "./returns";
+
 /** 단순 이동평균 */
 export const sma = (data: number[], period: number): number[] => {
   const result: number[] = [];
@@ -128,14 +130,16 @@ export const linearSlope = (data: number[]): number => {
   return slope / base;
 };
 
-/** 수익률 계산: (최근 / N일전 - 1) */
-export const returnPct = (closes: number[], nDays: number): number => {
-  const len = closes.length;
-  if (len < nDays + 1) return 0;
-  const start = closes[len - 1 - nDays];
-  const end = closes[len - 1];
-  return start === 0 ? 0 : (end / start - 1);
-};
+/**
+ * 수익률 계산: (최근 / N일전 - 1)
+ * Phase A P3 (2026-04-24): lib/signals/returns.ts::calcReturnNd 로 위임.
+ * 기존 시그너처(number 반환) 유지 — 호출 사이트 무변경.
+ * 값 동등성: closes 배열에 null/undefined 없고 nDays>0 인 정상 경로에서
+ *           기존 식 (end/start - 1) 과 수학적으로 동일.
+ *           `len < nDays+1` → 0, `start === 0` → 0 도 calcReturnNd 에서 동일 분기.
+ */
+export const returnPct = (closes: number[], nDays: number): number =>
+  calcReturnNd(closes, nDays).value;
 
 /** 볼린저 밴드 위치 — (price - sma20) / (2 * std20), 대략 -1 ~ +1 */
 export const bollingerPos = (closes: number[], period = 20): number => {
