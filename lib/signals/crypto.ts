@@ -93,7 +93,16 @@ export const c12Volume = (volToday: number, history30d: number[], priceUp: boole
 };
 
 // C13. Liquidation Spike (숏 청산 우세 → 강세, 롱 청산 우세 → 약세)
-export const c13LiquidationSpike = (longLiq: number, shortLiq: number) => {
+//
+// Phase A P2 (2026-04-24) 가드:
+//   Binance allForceOrders 응답 파싱 실패나 deriv API 장애 시 longLiq/shortLiq가
+//   NaN/Infinity/undefined로 들어올 수 있음. 이전에는 total 계산 시 NaN이 전파되고
+//   ratio 비교가 항상 false로 떨어져 50 fallback이 우연히 맞았지만 엄밀히는 정의 미흡.
+//   전체 {value,confidence,reason} 구조 개편은 별도 RFC로 분리 (docs/rfc/signal-function-signature.md).
+//   여기서는 C13만 명시적 가드 추가 — 비정상 입력 전부 neutral(50) 로 수렴.
+export const c13LiquidationSpike = (longLiq: number, shortLiq: number): number => {
+  if (!Number.isFinite(longLiq) || !Number.isFinite(shortLiq)) return 50;
+  if (longLiq < 0 || shortLiq < 0) return 50;
   const total = longLiq + shortLiq;
   if (total < 1_000_000) return 50; // 청산 미미 — neutral
   const shortRatio = shortLiq / total;
