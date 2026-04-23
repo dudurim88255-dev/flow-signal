@@ -59,7 +59,11 @@ async function harvestOne(
     const riskFlags = riskResult.failedChecks.length > 0 ? riskResult.failedChecks : undefined;
 
     if (riskFlags) {
-      console.log(`[harvest] ${market}/${ticker} 리스크 페널티: ${riskFlags.join(", ")}`);
+      // Phase A P1: 페널티 로그에 daysOperational 병기 (분석용, 게이팅 X).
+      console.log(
+        `[harvest] ${market}/${ticker} 리스크 페널티: ${riskFlags.join(", ")} ` +
+          `(daysOperational=${riskData.daysOperational})`,
+      );
     }
 
     await savePrediction({
@@ -80,6 +84,7 @@ async function harvestOne(
       outcome14d: "pending",
       scoreVersion: "v3.1",
       risk_flags: riskFlags,
+      daysOperational: riskData.daysOperational,
     });
 
     return {
@@ -115,7 +120,7 @@ export async function GET(req: NextRequest) {
       } catch (err) {
         // 로드 실패 시 빈 데이터로 폴백 (게이트 체크는 pass 처리)
         console.error(`[harvest] ${m} 리스크 데이터 로드 실패:`, err);
-        riskDataMap[m] = { recentRegimes: [], wfResult: null, verifiedCount: 0 };
+        riskDataMap[m] = { recentRegimes: [], wfResult: null, verifiedCount: 0, daysOperational: 0 };
       }
     })
   );

@@ -175,6 +175,7 @@ export async function GET(
           risk_flags: riskFlags,
           confidenceScore,
           confidenceLabel,
+          daysOperational: riskData.daysOperational,
         }).catch((err) =>
           console.warn(`[score] 예측 저장 실패 ${market}/${ticker}:`, err instanceof Error ? err.message : err)
         );

@@ -29,6 +29,9 @@ export type Prediction = {
   // Phase A P0 (2026-04-24): confidence 두 필드 분리
   confidenceScore?: number;         // 0~100, stddev 기반. Dashboard UI에서 표시.
   confidenceLabel?: ConfidenceLabel; // Risk Gate 로그 / MEMORY / 내러티브 등 텍스트 경로용.
+  // Phase A P1 (2026-04-24): Risk Gate 분석용 메타.
+  // 게이팅에는 사용하지 않음. 첫 prediction 저장일로부터 경과 일수.
+  daysOperational?: number;
 };
 
 export type MarketWeights = Record<string, number>;  // { C1: 12, C2: 12, ... }
