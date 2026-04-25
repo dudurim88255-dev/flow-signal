@@ -41,7 +41,7 @@
 | 3 | K7 (종목별 신용잔고) 출처 | **KIS Open API** (`/uapi/domestic-stock/v1/quotations/daily-credit-balance`) |
 | 4 | 금지 경로 | **KRX OTP+CSV / pykrx 류 운영 사용 금지** — KRX 명시적 IP 차단 정책 |
 | 5 | 인프라 | **GitHub Actions** 로 harvest 이전 — Vercel Hobby `maxDuration` 10s · cron 2개 한도 회피 |
-| 6 | KIS 계좌 종류 | **모의투자 우선**, 시세 정확성 1회 실측 후 실전 전환 여부 결정 |
+| 6 | KIS 계좌 종류 | **모의투자 우선** + ACNT_PWD 미등록 룰 + 만료 알림 자동화 (상세는 §Q6 Decision Detail 참조) |
 | 7 | 종목 확장 | **30 → 100 단계적**, 1000 은 baseline (10/24) 통과 후 |
 
 추가 결정:
@@ -181,6 +181,8 @@ async function evaluateKorea(meta: TickerMeta, onStep?: StepCallback) {
 3. KRX/KIS API 장애 폴백 동작 (last-good-known) 검증 — staging 에서 인위적 401/500 주입
 4. 휴장일 처리: KRX `chk-holiday` 또는 자체 캘린더 `holidays:2026` Redis 키 (1년 TTL)
 5. T+2 지연 데이터 (공매도) 의 `confidence: "low"` 자동 부착 검증
+6. **KIS 모의 키 만료 자동 알림** — `KIS_MOCK_ISSUED_AT` 환경변수 기반. GitHub Actions cron 이 발급일 +80일부터 일별 체크. 만료 7일 전부터 알림 발송: ①GitHub Issue 자동 생성 (제목: "[ALERT] KIS mock key expires in N days") + ②워크플로 실패 처리 → GitHub Mobile 앱 푸시 알림 자동 전달. 만료일 도래 시 K7 자동 `live: false` 전환 + `risk_flags: ["kis_mock_expired"]`.
+7. **ACNT_PWD 정기 grep 검증** — Phase 2 PR review 시 + GitHub Actions 주간 cron 으로 코드베이스 전체 grep. 발견 시 즉시 알림 + PR 차단.
 
 ---
 
@@ -270,6 +272,60 @@ KOSPI 외 종목 (BTC, NVDA) 은 영향 받지 않으므로 Track 분리 무관.
 
 ---
 
+## Q6 Decision Detail — KIS 계좌 종류 (2026-04-25 갱신)
+
+본 항목은 `docs/research-kis-security-options-2026-04-25.md` 조사 결과 반영.
+
+### KIS 3-Layer 보안 구조
+
+| Layer | 필요 조건 | 가능 작업 |
+|---|---|---|
+| 1 | App Key + Secret | Bearer Token 발급 → 시세/조회 |
+| 2 | + 계좌번호 + ACNT_PWD | 주문 가능 (HTTP body 평문) |
+| 3 | + OTP/보안카드/생체 | 출금/이체 (API 외부) |
+
+### 핵심 보안 룰 (절대 위반 금지)
+
+**ACNT_PWD 절대 secrets 미등록 룰:**
+- 환경변수에 `KIS_*_ACNT_PWD` 형식의 변수 등록 금지
+- 코드베이스(commit/working tree)에 계좌 비밀번호 평문/암호화 모두 등장 금지
+- 정기 grep 으로 강제: `grep -r "ACNT_PWD\|acnt_pwd\|account_password" .` 결과 0건 유지
+- 본 룰만 지키면 App Key 노출돼도 자산 위험 0
+
+### 결정 트리 (Phase 1 직후)
+
+```
+Phase 1 완료 (모의 + 실전 키 모두 발급) →
+↓
+[모의투자 시세 1회 실측] (ADR Q1)
+↓
+├─ 모의 시세 정확 + 100종목 이하 가능 → 모의 단독 (자산 위험 0)
+│   └─ 단점: 3개월마다 키 갱신 + 모의 계좌 재발급 필요 → §모의 갱신 자동화
+│
+└─ 모의 시세 부정확 또는 rate limit 부족 → 실전 단독 + ACNT_PWD 룰
+    └─ 보안: ACNT_PWD 미등록만 지키면 자산 위험 0, 시세 조회만 동작
+```
+
+### 모의 갱신 자동화 (Phase 5에 포함)
+
+KIS 모의투자 정책: 3개월 만료, 갱신 불가. 새 키 재발급만 가능.
+
+자동 알림 시스템:
+- 환경변수: `KIS_MOCK_ISSUED_AT` (발급일 기록)
+- GitHub Actions cron: 발급일 +80일부터 매일 체크
+- 만료 7일 전부터 알림 (이메일 또는 Slack webhook)
+- 만료일 도래 시 K7 신호 자동 `live: false` 전환 + `risk_flags: ["kis_mock_expired"]`
+- 다른 신호(K1~K6, K8, K9~K12)는 영향 받지 않음
+
+### 실전 키 사용 시 추가 보호
+
+본 결정 트리에서 실전으로 분기할 경우:
+- secrets 노출 모니터링: GitHub secret scanning 활성화 확인
+- IP 제한 대안: outbound IP 고정이 필요하면 GitHub Actions 의 IP 범위 또는 Vercel 의 Edge runtime 제약 검토
+- 의심 활동 감지: KIS 측 abnormal usage 알림이 흥권님 등록 이메일로 오는지 확인 (Phase 1에서 등록 이메일 검증)
+
+---
+
 ## Open Questions
 
 흥권님 후속 결정 또는 인증키 발급 후 실측 필요 항목:
@@ -281,6 +337,7 @@ KOSPI 외 종목 (BTC, NVDA) 은 영향 받지 않으므로 Track 분리 무관.
 5. **K4 의 보유율 기준일** — 현재 코드 `foreignHolding20dAgo` 는 "20영업일 전" 의미. KRX 응답이 영업일 기준인지 자연일 기준인지 확인 필요.
 6. **KRX/KIS 양쪽 SaaS 재배포 라이선스** — 무료 베타 종료(2026-10-24) 전까지 KRX 데이터사업부 02-3774-8904 + KIS Developers 양쪽 직접 문의.
 7. **KIS Account 모드 전환 트리거** — 모의 → 실전 전환 시 키만 교체하면 동작하는지 (URL 별도 `apivts.koreainvestment.com` vs `openapi.koreainvestment.com`) 확인 필요. fetcher 의 base URL 분기 설계.
+8. **모의 키 갱신 알림 채널** — ✅ 결정됨 (2026-04-25): **GitHub Mobile 앱 푸시 알림**. GitHub Actions cron 이 만료 7일 전부터 워크플로 내에서 의도적으로 fail 또는 issue 자동 생성 → GitHub Mobile 앱이 푸시 알림 자동 전달. 추가 secret / 외부 서비스 / 비용 없음. 흥권님 GitHub 계정(dudurim88255-dev)에 이미 설치됨.
 
 ---
 
