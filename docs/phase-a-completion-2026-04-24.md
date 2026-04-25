@@ -58,7 +58,7 @@
 ### 부속
 | 파일 | 변경 |
 |---|---|
-| `docs/decisions/005-stage2-scope.md` | **신규** — Stage 2 실제 범위 기록 (confidence 통일 미구현 사실) |
+| `docs/adr/005-stage2-scope.md` | **신규** — Stage 2 실제 범위 기록 (confidence 통일 미구현 사실) |
 | `package.json` + `pnpm-lock.yaml` | vitest dev dep + `test` / `test:watch` 스크립트 |
 | `vitest.config.ts` | **신규** — `@/*` alias + `lib/**/*.test.ts` include |
 
@@ -88,7 +88,7 @@
 ## 발견된 추가 이슈 (진단 문서에 없던 항목)
 
 1. **Stage 2 커밋 메시지 과장**  
-   `89613f3` 커밋 제목에 "confidence type unification"이 포함됐으나 실제 변경은 `risk_flags` 추가뿐이었다. Phase A P0 가 실제 구현을 대체. → `docs/decisions/005-stage2-scope.md` 로 기록.
+   `89613f3` 커밋 제목에 "confidence type unification"이 포함됐으나 실제 변경은 `risk_flags` 추가뿐이었다. Phase A P0 가 실제 구현을 대체. → `docs/adr/005-stage2-scope.md` 로 기록.
 
 2. **Next.js 16.2.2 확인**  
    `AGENTS.md`가 경고한 "NOT the Next.js you know"의 실체는 Turbopack default, async `params`, `middleware` → `proxy` rename, PPR 재설계 등. 이번 P0~P3 변경 대상 (`lib/signals/*`, `lib/predictions.ts`, route handlers)은 async `params` 가 이미 반영되어 있어 추가 영향 없음.
