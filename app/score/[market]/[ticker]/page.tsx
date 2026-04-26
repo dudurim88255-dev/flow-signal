@@ -221,20 +221,61 @@ function EntryZoneCard({ zone, market }: { zone: EntryZone; market: string }) {
 
 // ─── AISummaryInline ─────────────────────────────────────────────────────────
 
+/**
+ * 자동 한 줄 요약 (heuristic, AI 호출 없음).
+ *  - top driver = max(|score - 50| * weight)
+ *  - 점수 밴드 + top driver name + entryZone 결합 → 한국어 한 문장.
+ *  - AI 해설 더 보기 버튼은 별도 lazy-load (full prompt 호출).
+ */
+function buildHeuristicSummary(
+  result: ResultMeta,
+  signals: SignalScore[]
+): string {
+  if (signals.length === 0) {
+    return `점수 ${Math.round(result.score)} — 신호 분석 데이터 부족.`;
+  }
+  // top driver
+  const top = [...signals]
+    .map((s) => ({ ...s, impact: Math.abs(s.score - 50) * s.weight }))
+    .sort((a, b) => b.impact - a.impact)[0];
+
+  const score = Math.round(result.score);
+  const ez = result.entryZone;
+
+  // 점수 밴드별 톤
+  let tone = "";
+  if (score >= 80) tone = `강한 매수 우위 — ${top.name} 신호가 견인`;
+  else if (score >= 60) tone = `매수 우위 — ${top.name} 양호`;
+  else if (score >= 40) tone = `혼조 — 명확한 방향성 부족 (${top.name} 비중 큼)`;
+  else if (score >= 20) tone = `매도 우위 — ${top.name} 약세`;
+  else tone = `강한 매도 — ${top.name} 약세 신호 강함`;
+
+  // entryZone 보강
+  if (ez?.status === "pending_pullback") {
+    tone += ". 단기 과열, 되돌림 대기 권고";
+  } else if (ez?.status === "in_zone") {
+    tone += ". 현재가 진입 권장 영역 내";
+  }
+  return tone + ".";
+}
+
 function AISummaryInline({ market, ticker, result, signals }: {
   market: string;
   ticker: string;
   result: ResultMeta;
   signals: SignalScore[];
 }) {
-  const [comment, setComment] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [opened, setOpened] = useState(false);
+  const [aiComment, setAiComment] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiOpened, setAiOpened] = useState(false);
 
-  const fetch_ = async () => {
-    if (comment || loading) return;
-    setOpened(true);
-    setLoading(true);
+  // 자동 요약 — 신호 6개 이상 모이면 즉시 생성
+  const heuristic = signals.length >= 1 ? buildHeuristicSummary(result, signals) : null;
+
+  const fetchFullAI = async () => {
+    if (aiComment || aiLoading) return;
+    setAiOpened(true);
+    setAiLoading(true);
 
     const groupDefs = SIGNAL_GROUPS[market] ?? [];
     const components: Record<string, number> = {};
@@ -260,8 +301,8 @@ function AISummaryInline({ market, ticker, result, signals }: {
       const ct = res.headers.get("content-type") ?? "";
       if (ct.includes("application/json")) {
         const json = await res.json();
-        setComment(json.comment);
-        setLoading(false);
+        setAiComment(json.comment);
+        setAiLoading(false);
         return;
       }
       const reader = res.body?.getReader();
@@ -271,35 +312,38 @@ function AISummaryInline({ market, ticker, result, signals }: {
         const { done, value } = await reader.read();
         if (done) break;
         text += decoder.decode(value, { stream: true });
-        setComment(text);
+        setAiComment(text);
       }
-      setLoading(false);
+      setAiLoading(false);
     } catch {
-      setComment("AI 코멘트를 불러오지 못했습니다.");
-      setLoading(false);
+      setAiComment("AI 코멘트를 불러오지 못했습니다.");
+      setAiLoading(false);
     }
   };
 
-  if (!opened) {
-    return (
-      <button
-        onClick={fetch_}
-        className="w-full flex items-center justify-between py-2 px-3 rounded border border-ai/30 bg-ai/5 hover:bg-ai/10 transition-colors"
-      >
-        <span className="text-caption font-medium text-ai">AI 해설 보기</span>
-        <span className="text-micro text-ai opacity-70">→</span>
-      </button>
-    );
-  }
-
   return (
-    <div className="border-l-[3px] border-ai pl-3 py-1">
-      <p className="text-micro text-ai font-medium mb-0.5">AI 해설</p>
-      {loading && !comment && (
-        <p className="text-body text-fg-secondary">분석 중…</p>
+    <div className="border-l-[3px] border-ai pl-3 py-1.5 space-y-1.5">
+      <p className="text-micro text-ai font-medium">AI 해설</p>
+      {heuristic && (
+        <p className="text-body text-fg-primary leading-relaxed">{heuristic}</p>
       )}
-      {comment && (
-        <p className="text-body text-fg-primary leading-relaxed">{comment}</p>
+      {aiOpened && (
+        <div className="pt-1.5 border-t border-ai/20">
+          {aiLoading && !aiComment && (
+            <p className="text-body text-fg-secondary">상세 분석 중…</p>
+          )}
+          {aiComment && (
+            <p className="text-body text-fg-primary leading-relaxed">{aiComment}</p>
+          )}
+        </div>
+      )}
+      {!aiOpened && signals.length >= 6 && (
+        <button
+          onClick={fetchFullAI}
+          className="text-caption text-ai hover:opacity-80 transition-opacity"
+        >
+          상세 분석 보기 →
+        </button>
       )}
     </div>
   );
@@ -308,12 +352,55 @@ function AISummaryInline({ market, ticker, result, signals }: {
 // ─── ScoreHistorySparkline (FlowScore 7d) ───────────────────────────────────
 
 function ScoreHistorySparkline({ history, currentScore }: { history: number[]; currentScore: number }) {
-  // 빈/부족 데이터 fallback
-  if (!history || history.length === 0) {
+  const HISTORY_TARGET = 7;
+  const count = history?.length ?? 0;
+
+  // 0 ~ 6 일치만 누적 시 placeholder + 진행률
+  if (count < HISTORY_TARGET) {
+    const sparkColor = scoreToHex(currentScore);
     return (
       <div className="px-4 py-3 rounded-lg bg-bg-card border border-border-subtle">
-        <p className="text-caption text-fg-secondary mb-2">FlowScore 7일 추이</p>
-        <p className="text-body text-fg-tertiary">추이 데이터 누적 중…</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-caption text-fg-secondary">FlowScore 7일 추이</p>
+          <span className="text-caption text-fg-tertiary tabular-nums">
+            {count}/{HISTORY_TARGET}일
+          </span>
+        </div>
+        <p className="text-body text-fg-tertiary mb-2">
+          추이 데이터 누적 중 — {HISTORY_TARGET - count}일 더 필요
+        </p>
+        {/* 진행률 바 */}
+        <div className="h-1 bg-bg-primary rounded-full overflow-hidden mb-3">
+          <div
+            className="h-full rounded-full"
+            style={{ width: `${(count / HISTORY_TARGET) * 100}%`, backgroundColor: sparkColor, opacity: 0.5 }}
+          />
+        </div>
+        {/* 누적된 점수 점들 (있을 경우) */}
+        {count > 0 && (
+          <div className="flex items-end justify-between h-10 gap-1.5">
+            {Array.from({ length: HISTORY_TARGET }).map((_, i) => {
+              const filled = i < count;
+              const score = filled ? history[i] : null;
+              const dotH = score != null ? Math.max((score / 100) * 36, 4) : 4;
+              return (
+                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                  <div
+                    className="w-full max-w-[20px] rounded-sm"
+                    style={{
+                      height: dotH,
+                      backgroundColor: filled ? sparkColor : "rgb(31 32 36)",
+                      opacity: filled ? 1 : 0.6,
+                    }}
+                  />
+                  <span className="text-micro text-fg-tertiary tabular-nums leading-none">
+                    {filled ? Math.round(score!) : "·"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   }
@@ -472,14 +559,17 @@ function SignalGroupCard({ group, signals, market }: {
               </span>
             </div>
           </div>
-          {/* 미니 막대 */}
+          {/* 미니 막대 — title 로 신호 정식 이름 호버 표시 */}
           <div className="flex items-end gap-1 h-7">
             {groupSignals.map((s) => {
               const dormant = isKoreaDormant(s.id);
               const barColor = dormant ? "rgb(108 108 112)" : scoreToHex(s.score);
               const barH = Math.max((s.score / 100) * 24, 2);
+              const tip = dormant
+                ? `${s.id} ${s.name} — 데이터 미수집`
+                : `${s.id} ${s.name} — ${s.score.toFixed(0)}점${s.live ? "" : " (추정)"}`;
               return (
-                <div key={s.id} className="flex-1 flex flex-col items-center gap-0.5">
+                <div key={s.id} title={tip} className="flex-1 flex flex-col items-center gap-0.5 cursor-help">
                   <div
                     className="w-full rounded-sm"
                     style={{
@@ -797,7 +887,27 @@ export default function ScorePage() {
                   <span>실시간 <span className="text-fg-primary tabular-nums">{result.liveCount}/{result.totalCount}</span></span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  {result.cached && <span className="text-caption text-fg-tertiary">캐시됨</span>}
+                  {(() => {
+                    // evaluatedAt 기준 경과 시간 + 갱신까지 (10분 캐시 TTL).
+                    const evaluated = new Date(result.evaluatedAt);
+                    const ageMs = Date.now() - evaluated.getTime();
+                    const ageMin = Math.max(0, Math.round(ageMs / 60000));
+                    const remainMin = Math.max(0, 10 - ageMin);
+                    const evalLocal = evaluated.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+                    if (result.cached) {
+                      const tip = `10분 캐시 — 평가 ${evalLocal} (${ageMin}분 전), 갱신까지 ~${remainMin}분`;
+                      return (
+                        <span title={tip} className="text-caption text-fg-tertiary cursor-help underline decoration-dotted decoration-fg-tertiary/40 underline-offset-2">
+                          캐시 · {ageMin}m
+                        </span>
+                      );
+                    }
+                    return (
+                      <span title={`방금 평가 — ${evalLocal}`} className="text-caption text-signal-buy cursor-help">
+                        실시간
+                      </span>
+                    );
+                  })()}
                   {showKoreaDormantWarning && (
                     <span
                       title="K1~K8: KIS API 미연결 — K9~K12 (기술적 분석) 만으로 평가"
@@ -820,7 +930,7 @@ export default function ScorePage() {
             {result && (
               <div className="px-4 py-3 border-t border-border-subtle space-y-2.5">
                 {result.entryZone && <EntryZoneCard zone={result.entryZone} market={market} />}
-                {signals.length >= 6 && (
+                {signals.length >= 1 && (
                   <AISummaryInline market={market} ticker={ticker} result={result} signals={signals} />
                 )}
               </div>
