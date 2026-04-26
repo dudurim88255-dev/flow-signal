@@ -1,13 +1,16 @@
 "use client";
 
 /**
- * /score/[market]/[ticker] — 종목 신호 상세 페이지 v4
- * 디자인 전면 개선: 계층 구조 명확화, 가독성 향상, 섹션 구분 강화
+ * /score/[market]/[ticker] — 종목 신호 상세 페이지 v5
+ * 모바일 우선 (380px) 디자인 — docs/design/SCORE_PAGE.md 토큰 기반.
+ * 헤더 카드: 점수 도넛 + 가격 + 진입 영역 + AI 해설 통합.
  */
 
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useAlerts, requestNotificationPermission, fireNotification } from "@/lib/alerts";
+
+// ─── 타입 ────────────────────────────────────────────────────────────────────
 
 type SignalScore = {
   id: string;
@@ -35,6 +38,16 @@ type MacroContextData = {
   cached: boolean;
 };
 
+type EntryZoneStatus = "in_zone" | "pending_pullback" | "no_recommendation";
+type EntryZone = {
+  status: EntryZoneStatus;
+  lower: number | null;
+  upper: number | null;
+  ma20: number;
+  sigma: number;
+  reason: string;
+};
+
 type ResultMeta = {
   score: number;
   label: string;
@@ -42,9 +55,6 @@ type ResultMeta = {
   totalCount: number;
   evaluatedAt: string;
   modelVersion: string;
-  // Phase A P0: confidence 두 필드 분리.
-  //   confidenceScore (0~100) — UI에 그대로 표시
-  //   confidenceLabel — 텍스트 경로용 (옵션, UI 미사용)
   confidenceScore: number;
   confidenceLabel?: "high" | "med" | "low";
   price: number;
@@ -53,10 +63,12 @@ type ResultMeta = {
   spark: number[];
   name: string;
   cached: boolean;
-  risk_flags?: string[];  // Risk Gate 실패 체크 목록 (undefined = 통과)
+  risk_flags?: string[];
+  entryZone?: EntryZone | null;
+  history7d?: number[];
 };
 
-// ─── 시그널 그룹 정의 ────────────────────────────────────────────────────────
+// ─── 시그널 그룹 ─────────────────────────────────────────────────────────────
 
 type GroupDef = { label: string; ids: string[] };
 
@@ -79,29 +91,34 @@ const SIGNAL_GROUPS: Record<string, GroupDef[]> = {
   ],
 };
 
-// ─── 색상 헬퍼 ───────────────────────────────────────────────────────────────
+// 한국 dormant 신호 — K1~K8 미수집 (메모리 28)
+const KOREA_DORMANT_IDS = ["K1", "K2", "K3", "K4", "K5", "K6", "K7", "K8"];
 
-function scoreToColor(score: number): string {
-  if (score >= 70) return "#10b981";
-  if (score >= 55) return "#34d399";
-  if (score >= 45) return "#facc15";
-  if (score >= 30) return "#fb923c";
-  return "#ef4444";
+// ─── 토큰 헬퍼 ───────────────────────────────────────────────────────────────
+
+/** 점수 → SCORE_PAGE.md §6 의 시그널 토큰 (text/bg/border 클래스 prefix 용) */
+function scoreToToken(score: number): "strong-buy" | "buy" | "neutral" | "sell" | "strong-sell" {
+  if (score >= 80) return "strong-buy";
+  if (score >= 60) return "buy";
+  if (score >= 40) return "neutral";
+  if (score >= 20) return "sell";
+  return "strong-sell";
 }
 
-function scoreToBg(score: number): string {
-  if (score >= 70) return "bg-emerald-950 border-emerald-800 text-emerald-300";
-  if (score >= 55) return "bg-emerald-950 border-emerald-900 text-emerald-400";
-  if (score >= 45) return "bg-yellow-950 border-yellow-900 text-yellow-300";
-  if (score >= 30) return "bg-orange-950 border-orange-900 text-orange-300";
-  return "bg-red-950 border-red-900 text-red-300";
+/** 점수 → SCORE_PAGE.md hex (SVG / inline style 용) */
+function scoreToHex(score: number): string {
+  if (score >= 80) return "#10b981";
+  if (score >= 60) return "#34d399";
+  if (score >= 40) return "#6b7280";
+  if (score >= 20) return "#f87171";
+  return "#dc2626";
 }
 
 function pctColor(v: number | null): string {
-  if (v == null) return "text-gray-500";
-  if (v > 0) return "text-emerald-400";
-  if (v < 0) return "text-red-400";
-  return "text-gray-400";
+  if (v == null) return "text-fg-tertiary";
+  if (v > 0) return "text-signal-buy";
+  if (v < 0) return "text-signal-sell";
+  return "text-fg-tertiary";
 }
 
 function pctStr(v: number | null): string {
@@ -109,49 +126,44 @@ function pctStr(v: number | null): string {
   return (v > 0 ? "+" : "") + v.toFixed(1) + "%";
 }
 
-// ─── 섹션 헤더 ───────────────────────────────────────────────────────────────
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
-      {children}
-    </p>
-  );
+function formatPrice(market: string, price: number): string {
+  if (market === "korea") return `${Math.round(price).toLocaleString("ko-KR")}원`;
+  return `$${price.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
 }
 
-// ─── 원형 게이지 (SVG) ───────────────────────────────────────────────────────
+// ─── CircleGauge ─────────────────────────────────────────────────────────────
 
 function CircleGauge({ score, label, animating }: { score: number; label: string; animating: boolean }) {
-  const R = 52;
+  const R = 48;
   const C = 2 * Math.PI * R;
   const fill = animating ? (score / 100) * C : 0;
-  const color = scoreToColor(score);
+  const color = scoreToHex(score);
 
   return (
-    <div className="relative flex items-center justify-center">
-      <svg width="136" height="136" viewBox="0 0 136 136">
-        <circle cx="68" cy="68" r={R} fill="none" stroke="#1f2937" strokeWidth="12" />
+    <div className="relative flex items-center justify-center flex-shrink-0" style={{ width: 124, height: 124 }}>
+      <svg width="124" height="124" viewBox="0 0 124 124">
+        <circle cx="62" cy="62" r={R} fill="none" stroke="rgb(31 32 36)" strokeWidth="10" />
         <circle
-          cx="68" cy="68" r={R}
+          cx="62" cy="62" r={R}
           fill="none"
           stroke={color}
-          strokeWidth="12"
+          strokeWidth="10"
           strokeLinecap="round"
           strokeDasharray={`${C}`}
           strokeDashoffset={`${C - fill}`}
-          transform="rotate(-90 68 68)"
+          transform="rotate(-90 62 62)"
           style={{ transition: animating ? "stroke-dashoffset 1.2s cubic-bezier(0.34,1.56,0.64,1)" : "none" }}
         />
       </svg>
       <div className="absolute flex flex-col items-center">
-        <span className="text-4xl font-black text-white leading-none tabular-nums">{score}</span>
-        <span className="text-xs mt-1 font-bold tracking-wide" style={{ color }}>{label}</span>
+        <span className="font-medium tabular-nums leading-none" style={{ fontSize: 32, color: "rgb(231 231 233)" }}>{score}</span>
+        <span className="mt-1 font-medium tracking-wide" style={{ fontSize: 11, color }}>{label}</span>
       </div>
     </div>
   );
 }
 
-// ─── 스파크라인 (SVG) ────────────────────────────────────────────────────────
+// ─── SparkLine (가격) ────────────────────────────────────────────────────────
 
 function SparkLine({ prices }: { prices: number[] }) {
   if (prices.length < 2) return null;
@@ -165,267 +177,51 @@ function SparkLine({ prices }: { prices: number[] }) {
     return `${x},${y}`;
   }).join(" ");
   const isUp = prices[prices.length - 1] >= prices[0];
+  const color = isUp ? "#34d399" : "#f87171";
 
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
-      <polyline
-        points={pts}
-        fill="none"
-        stroke={isUp ? "#10b981" : "#ef4444"}
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-        opacity="0.8"
-      />
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5"
+        strokeLinejoin="round" strokeLinecap="round" opacity="0.85" />
     </svg>
   );
 }
 
-// ─── 상위 3 드라이버 ─────────────────────────────────────────────────────────
+// ─── EntryZoneCard ───────────────────────────────────────────────────────────
 
-function TopDrivers({ signals }: { signals: SignalScore[] }) {
-  const top = [...signals]
-    .map((s) => ({ ...s, impact: Math.abs(s.score - 50) * s.weight }))
-    .sort((a, b) => b.impact - a.impact)
-    .slice(0, 3);
+function EntryZoneCard({ zone, market }: { zone: EntryZone; market: string }) {
+  if (zone.status === "no_recommendation") return null;
 
-  if (top.length === 0) return null;
+  const isInZone = zone.status === "in_zone";
+  const tokenBg = isInZone ? "bg-signal-buy/10" : "bg-pending/10";
+  const tokenBorder = isInZone ? "border-signal-buy/30" : "border-pending/30";
+  const tokenText = isInZone ? "text-signal-buy" : "text-pending";
+  const icon = isInZone ? "✓" : "⚠";
+  const labelText = isInZone ? "즉시 진입권" : "되돌림 대기";
+
+  const lowerStr = zone.lower != null ? formatPrice(market, zone.lower) : "–";
+  const upperStr = zone.upper != null ? formatPrice(market, zone.upper) : "–";
 
   return (
-    <div className="mb-5">
-      <SectionLabel>주요 드라이버</SectionLabel>
-      <div className="space-y-2">
-        {top.map((s, idx) => {
-          const bullish = s.score > 50;
-          const color = scoreToColor(s.score);
-          const rank = ["①", "②", "③"][idx];
-          return (
-            <div
-              key={s.id}
-              className="flex items-center gap-3 p-3 bg-gray-900 border border-gray-800 rounded-xl"
-            >
-              <span className="text-base text-gray-500 w-5 flex-shrink-0">{rank}</span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className="text-sm font-medium text-white truncate">{s.name}</span>
-                  {s.live && (
-                    <span className="text-[10px] px-1.5 py-0.5 bg-emerald-900 text-emerald-400 rounded font-semibold flex-shrink-0">LIVE</span>
-                  )}
-                </div>
-                <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full"
-                    style={{ width: `${s.score}%`, backgroundColor: color }}
-                  />
-                </div>
-              </div>
-              <div className="flex flex-col items-end flex-shrink-0 gap-0.5">
-                <span className="text-base font-black tabular-nums" style={{ color }}>{s.score.toFixed(0)}</span>
-                <span className="text-[10px] text-gray-500">{bullish ? "▲ 매수" : "▼ 매도"}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ─── 신호 바 ────────────────────────────────────────────────────────────────
-
-function SignalBar({ signal, visible }: { signal: SignalScore; visible: boolean }) {
-  const color = scoreToColor(signal.score);
-  return (
-    <div className={`transition-all duration-500 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"}`}>
-      <div className="flex items-center justify-between mb-1.5">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-[11px] font-mono text-gray-400 w-7 flex-shrink-0">{signal.id}</span>
-          <span className="text-sm text-gray-200 truncate">{signal.name}</span>
-          {signal.live ? (
-            <span className="text-[10px] px-1 py-0.5 bg-emerald-900/60 text-emerald-400 rounded flex-shrink-0">LIVE</span>
-          ) : (
-            <span className="text-[10px] px-1 py-0.5 bg-gray-800 text-gray-400 rounded flex-shrink-0">추정</span>
-          )}
-        </div>
-        <span className="text-sm font-bold ml-3 flex-shrink-0 tabular-nums" style={{ color }}>
-          {signal.score.toFixed(0)}
+    <div className={`px-3 py-2.5 rounded border ${tokenBg} ${tokenBorder}`}>
+      <div className="flex items-center justify-between mb-1">
+        <span className={`text-caption font-medium ${tokenText}`}>진입 영역</span>
+        <span className={`text-caption font-medium ${tokenText} flex items-center gap-1`}>
+          <span>{icon}</span>
+          <span>{labelText}</span>
         </span>
       </div>
-      <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-700"
-          style={{ width: `${signal.score}%`, backgroundColor: color }}
-        />
-      </div>
+      <p className="text-body text-fg-primary tabular-nums">
+        {lowerStr} ~ {upperStr}
+      </p>
+      <p className="text-caption text-fg-secondary mt-0.5">{zone.reason}</p>
     </div>
   );
 }
 
-// ─── 신호 그룹 (아코디언) ────────────────────────────────────────────────────
+// ─── AISummaryInline ─────────────────────────────────────────────────────────
 
-function SignalGroup({ group, signals, visibleIds }: {
-  group: GroupDef;
-  signals: SignalScore[];
-  visibleIds: Set<string>;
-}) {
-  const [open, setOpen] = useState(false);
-  const groupSignals = group.ids
-    .map((id) => signals.find((s) => s.id === id))
-    .filter(Boolean) as SignalScore[];
-
-  if (groupSignals.length === 0) return null;
-
-  const avg = groupSignals.reduce((s, g) => s + g.score, 0) / groupSignals.length;
-  const color = scoreToColor(avg);
-
-  return (
-    <div className="border border-gray-800 rounded-xl overflow-hidden">
-      <button
-        className="w-full flex items-center justify-between px-4 py-3.5 bg-gray-900 hover:bg-gray-850 transition-colors text-left"
-        onClick={() => setOpen((v) => !v)}
-      >
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-gray-200">{group.label}</span>
-          <span className="text-xs text-gray-400">({groupSignals.length})</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <div className="w-12 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-              <div className="h-full rounded-full" style={{ width: `${avg}%`, backgroundColor: color }} />
-            </div>
-            <span className="text-sm font-bold tabular-nums" style={{ color }}>{avg.toFixed(0)}</span>
-          </div>
-          <svg
-            className={`w-4 h-4 text-gray-600 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        </div>
-      </button>
-      {open && (
-        <div className="px-4 py-4 space-y-4 bg-gray-950 border-t border-gray-800">
-          {groupSignals.map((s) => (
-            <SignalBar key={s.id} signal={s} visible={visibleIds.has(s.id)} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── 알림 설정 섹션 ─────────────────────────────────────────────────────────
-
-function AlertSection({ market, ticker, result }: {
-  market: string;
-  ticker: string;
-  result: ResultMeta;
-}) {
-  const { add, remove, getFor } = useAlerts();
-  const [open, setOpen] = useState(false);
-  const [scoreThreshold, setScoreThreshold] = useState("");
-  const [alertType, setAlertType] = useState<"score_above" | "score_below">("score_above");
-  const [saved, setSaved] = useState(false);
-
-  const stockId = ticker;
-  const myAlerts = getFor(stockId);
-
-  const handleAdd = async () => {
-    const val = parseFloat(scoreThreshold);
-    if (isNaN(val) || val < 0 || val > 100) return;
-    await requestNotificationPermission();
-    add({
-      stockId,
-      name: result.name,
-      symbol: ticker,
-      market: market as "kospi" | "korea" | "us" | "crypto",
-      type: alertType,
-      value: val,
-    });
-    setScoreThreshold("");
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-    fireNotification(`🔔 알림 설정 완료`, `${result.name} FlowScore ${val}점 ${alertType === "score_above" ? "이상" : "이하"} 시 알림`);
-  };
-
-  return (
-    <div className="mb-5">
-      <div className="flex items-center justify-between mb-3">
-        <SectionLabel>알림</SectionLabel>
-        <button
-          onClick={() => setOpen(v => !v)}
-          className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors border ${
-            open
-              ? "bg-gray-800 border-gray-700 text-gray-400"
-              : "bg-emerald-900/50 border-emerald-800 text-emerald-300 hover:bg-emerald-900"
-          }`}
-        >
-          {open ? "닫기" : `🔔 알림 설정${myAlerts.length > 0 ? ` · ${myAlerts.length}개 등록` : ""}`}
-        </button>
-      </div>
-
-      {myAlerts.length > 0 && (
-        <div className="flex flex-col gap-2 mb-3">
-          {myAlerts.map(a => (
-            <div key={a.id} className="flex items-center justify-between bg-gray-900 border border-gray-800 rounded-xl px-4 py-2.5">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-300">FlowScore</span>
-                <span className="text-sm font-bold text-white">{a.value}점</span>
-                <span className="text-sm text-gray-400">{a.type === "score_above" ? "이상" : "이하"} 도달 시</span>
-              </div>
-              <button onClick={() => remove(a.id)} className="text-xs text-gray-400 hover:text-red-400 transition-colors">
-                삭제
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {open && (
-        <div className="p-4 bg-gray-900 border border-gray-800 rounded-xl space-y-3">
-          <div className="flex items-center gap-2">
-            <select
-              value={alertType}
-              onChange={e => setAlertType(e.target.value as "score_above" | "score_below")}
-              className="flex-shrink-0 bg-gray-800 border border-gray-700 text-gray-200 text-sm rounded-lg px-3 py-2 outline-none"
-            >
-              <option value="score_above">이상 도달 시</option>
-              <option value="score_below">이하 도달 시</option>
-            </select>
-            <div className="flex-1 relative">
-              <input
-                type="number"
-                min={0}
-                max={100}
-                placeholder={`현재 ${Math.round(result.score)}점`}
-                value={scoreThreshold}
-                onChange={e => setScoreThreshold(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 outline-none placeholder-gray-600 pr-10"
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">점</span>
-            </div>
-          </div>
-          <button
-            onClick={handleAdd}
-            disabled={!scoreThreshold || saved}
-            className="w-full py-2.5 rounded-xl text-sm font-bold transition-all bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {saved ? "✓ 알림 저장됨" : "알림 추가"}
-          </button>
-          <p className="text-xs text-gray-400 text-center">FlowScore 조건 도달 시 브라우저 알림으로 알려드립니다</p>
-        </div>
-      )}
-
-      {!open && myAlerts.length === 0 && (
-        <p className="text-xs text-gray-400 pl-0.5">FlowScore 조건 도달 시 알림을 받을 수 있습니다.</p>
-      )}
-    </div>
-  );
-}
-
-// ─── AI 코멘트 섹션 ─────────────────────────────────────────────────────────
-
-function AiCommentSection({ market, ticker, result, signals }: {
+function AISummaryInline({ market, ticker, result, signals }: {
   market: string;
   ticker: string;
   result: ResultMeta;
@@ -453,22 +249,14 @@ function AiCommentSection({ market, ticker, result, signals }: {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: result.name,
-          symbol: ticker,
-          market,
-          score: result.score,
-          grade: result.label,
-          change1d: 0,
-          p7d: result.ret7d != null ? +(result.ret7d * 100).toFixed(2) : 0,
-          p30d: result.ret30d != null ? +(result.ret30d * 100).toFixed(2) : 0,
-          rsi: 0,
-          volRatio: 0,
+          name: result.name, symbol: ticker, market, score: result.score, grade: result.label,
+          change1d: 0, p7d: result.ret7d ?? 0, p30d: result.ret30d ?? 0, rsi: 0, volRatio: 0,
           signals: signals.slice(0, 5).map((s) => `${s.name}(${s.score.toFixed(0)})`),
-          components: { momentum: 0, technical: 0, volume: 0, trend: 0, ...Object.fromEntries(compArr.map((s) => s.split(": "))) },
+          components: { momentum: 0, technical: 0, volume: 0, trend: 0,
+            ...Object.fromEntries(compArr.map((s) => s.split(": "))) },
         }),
       });
       if (!res.ok) throw new Error();
-
       const ct = res.headers.get("content-type") ?? "";
       if (ct.includes("application/json")) {
         const json = await res.json();
@@ -476,7 +264,6 @@ function AiCommentSection({ market, ticker, result, signals }: {
         setLoading(false);
         return;
       }
-
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
       let text = "";
@@ -493,49 +280,91 @@ function AiCommentSection({ market, ticker, result, signals }: {
     }
   };
 
+  if (!opened) {
+    return (
+      <button
+        onClick={fetch_}
+        className="w-full flex items-center justify-between py-2 px-3 rounded border border-ai/30 bg-ai/5 hover:bg-ai/10 transition-colors"
+      >
+        <span className="text-caption font-medium text-ai">AI 해설 보기</span>
+        <span className="text-micro text-ai opacity-70">→</span>
+      </button>
+    );
+  }
+
   return (
-    <div className="mb-5">
-      <div className="flex items-center justify-between mb-3">
-        <SectionLabel>AI 해설</SectionLabel>
-        {!opened && (
-          <button
-            onClick={fetch_}
-            className="text-xs px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 rounded-full font-medium transition-colors"
-          >
-            분석 보기
-          </button>
-        )}
-      </div>
-
+    <div className="border-l-[3px] border-ai pl-3 py-1">
+      <p className="text-micro text-ai font-medium mb-0.5">AI 해설</p>
       {loading && !comment && (
-        <div className="flex items-center gap-2.5 p-4 bg-gray-900 border border-gray-800 rounded-xl">
-          <div className="w-3.5 h-3.5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-          <span className="text-sm text-gray-400">AI 분석 중…</span>
-        </div>
+        <p className="text-body text-fg-secondary">분석 중…</p>
       )}
-
       {comment && (
-        <div className="p-4 bg-gray-900 border border-gray-800 rounded-xl">
-          <p className="text-sm text-gray-200 leading-relaxed">{comment}</p>
-        </div>
-      )}
-
-      {!opened && !comment && (
-        <p className="text-xs text-gray-400">버튼을 눌러 이 종목에 대한 AI 해설을 확인하세요.</p>
+        <p className="text-body text-fg-primary leading-relaxed">{comment}</p>
       )}
     </div>
   );
 }
 
-// ─── 거시경제 맥락 카드 ──────────────────────────────────────────────────────
+// ─── ScoreHistorySparkline (FlowScore 7d) ───────────────────────────────────
 
-function MacroContextCard({ market }: { market: string }) {
+function ScoreHistorySparkline({ history, currentScore }: { history: number[]; currentScore: number }) {
+  // 빈/부족 데이터 fallback
+  if (!history || history.length === 0) {
+    return (
+      <div className="px-4 py-3 rounded-lg bg-bg-card border border-border-subtle">
+        <p className="text-caption text-fg-secondary mb-2">FlowScore 7일 추이</p>
+        <p className="text-body text-fg-tertiary">추이 데이터 누적 중…</p>
+      </div>
+    );
+  }
+
+  const w = 280, h = 64, pad = 8;
+  const max = 100, min = 0;
+  const points = history.map((s, i) => {
+    const x = pad + (i / Math.max(history.length - 1, 1)) * (w - pad * 2);
+    const y = h - pad - ((s - min) / (max - min)) * (h - pad * 2);
+    return { x, y, score: s };
+  });
+
+  const trend = history[history.length - 1] - history[0];
+  const lineColor = scoreToHex(currentScore);
+  const polyline = points.map((p) => `${p.x},${p.y}`).join(" ");
+  const areaPath = `M${points[0].x},${h - pad} L${polyline.split(" ").join(" L")} L${points[points.length - 1].x},${h - pad} Z`;
+
+  return (
+    <div className="px-4 py-3 rounded-lg bg-bg-card border border-border-subtle">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-caption text-fg-secondary">FlowScore 7일 추이</p>
+        <span className={`text-caption tabular-nums ${trend >= 0 ? "text-signal-buy" : "text-signal-sell"}`}>
+          {trend >= 0 ? "+" : ""}{trend.toFixed(0)}
+        </span>
+      </div>
+      <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+        <path d={areaPath} fill={lineColor} opacity="0.15" />
+        <polyline points={polyline} fill="none" stroke={lineColor}
+          strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+        {points.map((p, i) => (
+          <g key={i}>
+            <circle cx={p.x} cy={p.y} r="2.5" fill={lineColor} />
+            <text x={p.x} y={p.y - 6} textAnchor="middle" fontSize="9"
+              fill="rgb(156 156 160)" className="tabular-nums">
+              {Math.round(p.score)}
+            </text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+// ─── MacroCard (2x2) ─────────────────────────────────────────────────────────
+
+function MacroCard({ market }: { market: string }) {
   const [data, setData] = useState<MacroContextData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setData(null);
-    setLoading(true);
+    setData(null); setLoading(true);
     fetch(`/api/macro-context?market=${market}`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((json: MacroContextData) => { setData(json); setLoading(false); })
@@ -544,11 +373,11 @@ function MacroContextCard({ market }: { market: string }) {
 
   if (loading) {
     return (
-      <div className="mb-5">
-        <SectionLabel>거시경제 맥락</SectionLabel>
-        <div className="grid grid-cols-2 gap-2.5">
+      <div>
+        <p className="text-caption text-fg-secondary uppercase tracking-wider mb-2">거시경제 맥락</p>
+        <div className="grid grid-cols-2 gap-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-20 bg-gray-900 border border-gray-800 rounded-xl animate-pulse" />
+            <div key={i} className="h-20 bg-bg-card border border-border-subtle rounded animate-pulse" />
           ))}
         </div>
       </div>
@@ -558,27 +387,39 @@ function MacroContextCard({ market }: { market: string }) {
   if (!data || data.indicators.length === 0) return null;
 
   return (
-    <div className="mb-5">
-      <SectionLabel>거시경제 맥락</SectionLabel>
-      <div className="grid grid-cols-2 gap-2.5">
+    <div>
+      <p className="text-caption text-fg-secondary uppercase tracking-wider mb-2">거시경제 맥락</p>
+      <div className="grid grid-cols-2 gap-2">
         {data.indicators.map((ind) => {
           const hasChange = ind.change7d != null;
           const isPositive = hasChange && (ind.change7d ?? 0) > 0;
           const isNegative = hasChange && (ind.change7d ?? 0) < 0;
-          const changeGood = ind.positiveIsGood ? isPositive : isNegative;
-          const changeBad = ind.positiveIsGood ? isNegative : isPositive;
-          const changeColor = changeBad ? "text-red-400" : changeGood ? "text-emerald-400" : "text-gray-500";
+          const favorable = ind.positiveIsGood ? isPositive : isNegative;
+          const adverse = ind.positiveIsGood ? isNegative : isPositive;
+
+          // 우호/불리 — 종목 등락 색과 의도적으로 분리. 작은 점 + 라벨.
+          const badgeText = favorable ? "우호" : adverse ? "불리" : null;
+          const badgeColor = favorable ? "bg-signal-buy" : adverse ? "bg-signal-sell" : "bg-fg-tertiary";
+
           const sign = hasChange && (ind.change7d ?? 0) > 0 ? "+" : "";
 
           return (
-            <div key={ind.id} className="p-3.5 bg-gray-900 border border-gray-800 rounded-xl" title={ind.description}>
-              <p className="text-xs text-gray-500 mb-2 truncate">{ind.label}</p>
-              <p className="text-xl font-black text-white leading-none tabular-nums">
+            <div key={ind.id} className="p-3 bg-bg-card border border-border-subtle rounded" title={ind.description}>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-caption text-fg-secondary truncate">{ind.label}</p>
+                {badgeText && (
+                  <span className="flex items-center gap-1 flex-shrink-0">
+                    <span className={`w-1.5 h-1.5 rounded-full ${badgeColor}`} />
+                    <span className="text-micro text-fg-secondary">{badgeText}</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-h3 text-fg-primary leading-none tabular-nums">
                 {ind.value.toLocaleString("ko-KR")}
-                <span className="text-xs font-normal text-gray-500 ml-1">{ind.unit}</span>
+                <span className="text-caption font-normal text-fg-tertiary ml-1">{ind.unit}</span>
               </p>
               {hasChange && (
-                <p className={`text-xs mt-1.5 font-medium ${changeColor}`}>
+                <p className="text-caption mt-1 text-fg-tertiary tabular-nums">
                   7일 {sign}{(ind.change7d ?? 0).toFixed(ind.unit === "원" ? 0 : 2)}{ind.unit}
                 </p>
               )}
@@ -590,6 +431,216 @@ function MacroContextCard({ market }: { market: string }) {
   );
 }
 
+// ─── SignalGroupCard (4 미니 막대) ──────────────────────────────────────────
+
+function SignalGroupCard({ group, signals, market }: {
+  group: GroupDef;
+  signals: SignalScore[];
+  market: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const groupSignals = group.ids
+    .map((id) => signals.find((s) => s.id === id))
+    .filter(Boolean) as SignalScore[];
+
+  if (groupSignals.length === 0) return null;
+
+  // 한국 dormant 신호 (K1~K8) 는 평균에서 제외
+  const isKoreaDormant = (id: string) => market === "korea" && KOREA_DORMANT_IDS.includes(id);
+  const activeSignals = groupSignals.filter((s) => !isKoreaDormant(s.id));
+  const avg = activeSignals.length > 0
+    ? activeSignals.reduce((s, g) => s + g.score, 0) / activeSignals.length
+    : 0;
+  const avgColor = scoreToHex(avg);
+
+  // 미니 막대 — 그룹 안 모든 신호 (dormant 포함, 시각적으로 흐림)
+  return (
+    <div className="rounded-lg bg-bg-card border border-border-subtle overflow-hidden">
+      <button
+        className="w-full flex items-center justify-between px-3.5 py-3 text-left"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-body font-medium text-fg-primary">{group.label}</span>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <span className="text-caption text-fg-tertiary tabular-nums">
+                ({activeSignals.length}/{groupSignals.length})
+              </span>
+              <span className="text-h3 tabular-nums" style={{ color: avgColor }}>
+                {avg.toFixed(0)}
+              </span>
+            </div>
+          </div>
+          {/* 미니 막대 */}
+          <div className="flex items-end gap-1 h-7">
+            {groupSignals.map((s) => {
+              const dormant = isKoreaDormant(s.id);
+              const barColor = dormant ? "rgb(108 108 112)" : scoreToHex(s.score);
+              const barH = Math.max((s.score / 100) * 24, 2);
+              return (
+                <div key={s.id} className="flex-1 flex flex-col items-center gap-0.5">
+                  <div
+                    className="w-full rounded-sm"
+                    style={{
+                      height: barH,
+                      backgroundColor: barColor,
+                      opacity: dormant ? 0.4 : 1,
+                    }}
+                  />
+                  <span className="text-micro text-fg-tertiary tabular-nums leading-none">{s.id}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <svg
+          className={`w-4 h-4 ml-3 flex-shrink-0 text-fg-tertiary transition-transform ${open ? "rotate-180" : ""}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="px-3.5 py-3 bg-bg-card-elevated border-t border-border-subtle space-y-3">
+          {groupSignals.map((s) => {
+            const dormant = isKoreaDormant(s.id);
+            const sigColor = dormant ? "rgb(108 108 112)" : scoreToHex(s.score);
+            return (
+              <div key={s.id} className={dormant ? "opacity-50" : ""}>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-micro font-mono text-fg-tertiary w-7 flex-shrink-0">{s.id}</span>
+                    <span className="text-body text-fg-primary truncate">{s.name}</span>
+                    {dormant && (
+                      <span className="text-micro px-1 py-0.5 bg-bg-card border border-border-subtle text-fg-tertiary rounded-sm flex-shrink-0">
+                        데이터 미수집
+                      </span>
+                    )}
+                    {!dormant && s.live && (
+                      <span className="text-micro px-1 py-0.5 bg-signal-buy/10 text-signal-buy rounded-sm flex-shrink-0">
+                        LIVE
+                      </span>
+                    )}
+                    {!dormant && !s.live && (
+                      <span className="text-micro px-1 py-0.5 bg-bg-card text-fg-tertiary rounded-sm flex-shrink-0">
+                        추정
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-body font-medium ml-2 tabular-nums" style={{ color: sigColor }}>
+                    {s.score.toFixed(0)}
+                  </span>
+                </div>
+                <div className="h-1.5 bg-bg-primary rounded-full overflow-hidden">
+                  <div className="h-full rounded-full" style={{
+                    width: `${s.score}%`, backgroundColor: sigColor, opacity: dormant ? 0.4 : 1,
+                  }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── AlertSection (기존 유지, 토큰 정리) ─────────────────────────────────────
+
+function AlertSection({ market, ticker, result }: {
+  market: string;
+  ticker: string;
+  result: ResultMeta;
+}) {
+  const { add, remove, getFor } = useAlerts();
+  const [open, setOpen] = useState(false);
+  const [scoreThreshold, setScoreThreshold] = useState("");
+  const [alertType, setAlertType] = useState<"score_above" | "score_below">("score_above");
+  const [saved, setSaved] = useState(false);
+
+  const stockId = ticker;
+  const myAlerts = getFor(stockId);
+
+  const handleAdd = async () => {
+    const val = parseFloat(scoreThreshold);
+    if (isNaN(val) || val < 0 || val > 100) return;
+    await requestNotificationPermission();
+    add({
+      stockId, name: result.name, symbol: ticker,
+      market: market as "kospi" | "korea" | "us" | "crypto",
+      type: alertType, value: val,
+    });
+    setScoreThreshold("");
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+    fireNotification(`🔔 알림 설정 완료`,
+      `${result.name} FlowScore ${val}점 ${alertType === "score_above" ? "이상" : "이하"} 시 알림`);
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-caption text-fg-secondary uppercase tracking-wider">알림</p>
+        <button
+          onClick={() => setOpen(v => !v)}
+          className={`text-caption px-2.5 py-1 rounded font-medium transition-colors border ${
+            open
+              ? "bg-bg-card border-border-subtle text-fg-secondary"
+              : "bg-signal-buy/10 border-signal-buy/30 text-signal-buy hover:bg-signal-buy/20"
+          }`}
+        >
+          {open ? "닫기" : `🔔 설정${myAlerts.length > 0 ? ` · ${myAlerts.length}` : ""}`}
+        </button>
+      </div>
+
+      {myAlerts.length > 0 && (
+        <div className="flex flex-col gap-1.5 mb-2">
+          {myAlerts.map(a => (
+            <div key={a.id} className="flex items-center justify-between bg-bg-card border border-border-subtle rounded px-3 py-2">
+              <span className="text-body text-fg-primary">
+                FlowScore <span className="font-medium tabular-nums">{a.value}</span>점 {a.type === "score_above" ? "이상" : "이하"}
+              </span>
+              <button onClick={() => remove(a.id)} className="text-caption text-fg-tertiary hover:text-signal-sell transition-colors">
+                삭제
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {open && (
+        <div className="p-3 bg-bg-card border border-border-subtle rounded space-y-2">
+          <div className="flex items-center gap-2">
+            <select
+              value={alertType}
+              onChange={e => setAlertType(e.target.value as "score_above" | "score_below")}
+              className="flex-shrink-0 bg-bg-card-elevated border border-border-subtle text-fg-primary text-body rounded px-2 py-1.5 outline-none"
+            >
+              <option value="score_above">이상</option>
+              <option value="score_below">이하</option>
+            </select>
+            <input
+              type="number" min={0} max={100}
+              placeholder={`현재 ${Math.round(result.score)}점`}
+              value={scoreThreshold}
+              onChange={e => setScoreThreshold(e.target.value)}
+              className="flex-1 bg-bg-card-elevated border border-border-subtle text-fg-primary text-body rounded px-2 py-1.5 outline-none placeholder:text-fg-tertiary"
+            />
+          </div>
+          <button
+            onClick={handleAdd}
+            disabled={!scoreThreshold || saved}
+            className="w-full py-2 rounded text-body font-medium transition-colors bg-signal-buy hover:opacity-90 text-bg-primary disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {saved ? "✓ 저장됨" : "알림 추가"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── 메인 페이지 ─────────────────────────────────────────────────────────────
 
 export default function ScorePage() {
@@ -597,7 +648,6 @@ export default function ScorePage() {
   const { market, ticker } = params;
 
   const [signals, setSignals] = useState<SignalScore[]>([]);
-  const [visibleIds, setVisibleIds] = useState<Set<string>>(new Set());
   const [result, setResult] = useState<ResultMeta | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -608,15 +658,9 @@ export default function ScorePage() {
 
   useEffect(() => {
     if (!market || !ticker) return;
-
     let cancelled = false;
 
-    setSignals([]);
-    setVisibleIds(new Set());
-    setResult(null);
-    setError(null);
-    setLoading(true);
-    setGaugeAnim(false);
+    setSignals([]); setResult(null); setError(null); setLoading(true); setGaugeAnim(false);
     gotResultRef.current = false;
 
     const es = new EventSource(`/api/score/${market}/${ticker}`);
@@ -626,9 +670,6 @@ export default function ScorePage() {
       if (cancelled) return;
       const signal: SignalScore = JSON.parse(e.data);
       setSignals((prev) => [...prev, signal]);
-      setTimeout(() => {
-        setVisibleIds((prev) => new Set([...prev, signal.id]));
-      }, 50);
     });
 
     es.addEventListener("result", (e) => {
@@ -641,12 +682,10 @@ export default function ScorePage() {
       setTimeout(() => setGaugeAnim(true), 100);
     });
 
-    // 서버가 보낸 커스텀 error 이벤트 (data 있음) — 서버측 평가 실패
     es.addEventListener("error", (e) => {
       if (cancelled) return;
       if (gotResultRef.current) { es.close(); return; }
       const raw = (e as MessageEvent).data;
-      // data 없는 native 연결 오류는 onerror에서 처리
       if (raw == null) return;
       try {
         const payload = JSON.parse(raw);
@@ -654,217 +693,203 @@ export default function ScorePage() {
       } catch {
         setError("평가 중 오류가 발생했습니다");
       }
-      setLoading(false);
-      es.close();
+      setLoading(false); es.close();
     });
 
-    // native 연결 오류 (data 없음) — 네트워크/서버 연결 문제
     es.onerror = (e) => {
       if (cancelled) return;
       if (gotResultRef.current) { es.close(); return; }
-      // data가 있으면 커스텀 error 이벤트 — 위 addEventListener에서 처리됨
       if ((e as MessageEvent).data != null) return;
       if (es.readyState === EventSource.CLOSED) return;
       setError("연결이 끊어졌습니다. 새로고침해 주세요.");
-      setLoading(false);
-      es.close();
+      setLoading(false); es.close();
     };
 
-    return () => {
-      cancelled = true;
-      es.close();
-    };
+    return () => { cancelled = true; es.close(); };
   }, [market, ticker]);
 
   const marketLabel =
     market === "crypto" ? "암호화폐" : market === "korea" ? "국내주식" : "미국주식";
 
-  const marketBadgeStyle =
-    market === "crypto"
-      ? "bg-yellow-950 border-yellow-900 text-yellow-400"
-      : market === "korea"
-      ? "bg-blue-950 border-blue-900 text-blue-400"
-      : "bg-emerald-950 border-emerald-900 text-emerald-400";
-
   const groups = SIGNAL_GROUPS[market] ?? [];
 
+  // 한국 K1~K8 dormant 경고 — 활성 신호 ≥4 (K9~K12) 인데 K1~K8 모두 추정/0 점이면 표시
+  const showKoreaDormantWarning = market === "korea" && signals.some((s) =>
+    KOREA_DORMANT_IDS.includes(s.id)
+  );
+
   return (
-    <main className="min-h-screen bg-gray-950 text-white">
+    <main className="min-h-screen bg-bg-primary text-fg-primary">
       {/* 상단 네비 */}
-      <nav className="sticky top-0 z-10 bg-gray-950/90 backdrop-blur border-b border-gray-900 px-4 py-3">
-        <a href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-300 transition-colors">
-          <svg width={16} height={16} className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <nav className="sticky top-0 z-10 bg-bg-primary/90 backdrop-blur border-b border-border-subtle px-4 py-2.5">
+        <a href="/dashboard" className="inline-flex items-center gap-1 text-caption text-fg-tertiary hover:text-fg-secondary transition-colors">
+          <svg width={14} height={14} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
           대시보드
         </a>
       </nav>
 
-      <div className="max-w-lg mx-auto px-4 py-6">
+      {/* 페이지 컨테이너 — 모바일 380px 우선, 태블릿 560, 데스크톱 1080 (2 col) */}
+      <div className="mx-auto px-3.5 py-3 sm:max-w-[560px] sm:px-5 sm:py-4 lg:max-w-[1080px] lg:px-8 lg:py-6 lg:grid lg:grid-cols-[minmax(0,540px)_1fr] lg:gap-6">
 
-        {/* ── 히어로 카드 ── */}
-        <div className="mb-6 rounded-2xl overflow-hidden border border-gray-800">
-          {/* 종목명 영역 */}
-          <div className="px-5 pt-5 pb-4 bg-gray-900">
-            <div className="flex items-center gap-2 mb-1">
-              <span className={`text-xs px-2 py-0.5 rounded-md border font-semibold ${marketBadgeStyle}`}>
-                {marketLabel}
-              </span>
-              <span className="text-xs font-mono text-gray-400">{decodeURIComponent(ticker)}</span>
+        {/* 좌측 컬럼 (모바일/태블릿: 단일, 데스크톱: 좌측) */}
+        <div className="space-y-3">
+
+          {/* ── 헤더 카드 (점수 + 가격 + 진입영역 + AI) ── */}
+          <div className="bg-bg-card border border-border-subtle rounded-lg overflow-hidden">
+            {/* 종목명 */}
+            <div className="px-4 pt-4 pb-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="text-micro px-1.5 py-0.5 rounded-sm border border-border-subtle bg-bg-card-elevated text-fg-secondary font-medium">
+                  {marketLabel}
+                </span>
+                <span className="text-micro font-mono text-fg-tertiary">{decodeURIComponent(ticker)}</span>
+              </div>
+              <h1 className="text-h1 text-fg-primary truncate">
+                {result?.name ?? decodeURIComponent(ticker)}
+              </h1>
             </div>
-            <h1 className="text-xl font-black text-white truncate">
-              {result?.name ?? decodeURIComponent(ticker)}
-            </h1>
-          </div>
 
-          {/* 게이지 + 가격 영역 */}
-          <div className="flex items-center gap-5 px-5 py-5 bg-gray-950 border-t border-gray-800">
-            {/* 원형 게이지 */}
-            {result ? (
-              <CircleGauge score={result.score} label={result.label} animating={gaugeAnim} />
-            ) : (
-              <div className="w-[136px] h-[136px] rounded-full border-[12px] border-gray-800 animate-pulse flex-shrink-0" />
+            {/* 게이지 + 가격 */}
+            <div className="flex items-start gap-4 px-4 pb-3">
+              {result ? (
+                <CircleGauge score={result.score} label={result.label} animating={gaugeAnim} />
+              ) : (
+                <div className="w-[124px] h-[124px] rounded-full border-[10px] border-border-subtle animate-pulse flex-shrink-0" />
+              )}
+              <div className="flex-1 min-w-0 space-y-1.5">
+                {result?.price ? (
+                  <p className="text-h2 text-fg-primary tabular-nums">
+                    {formatPrice(market, result.price)}
+                  </p>
+                ) : (
+                  <div className="h-7 bg-bg-card-elevated rounded w-24 animate-pulse" />
+                )}
+                <div className="flex gap-3">
+                  {(["7일", "30일"] as const).map((label, i) => {
+                    const val = i === 0 ? result?.ret7d : result?.ret30d;
+                    return (
+                      <div key={label} className="flex flex-col">
+                        <span className="text-micro text-fg-tertiary mb-0.5">{label}</span>
+                        {val !== undefined && val !== null ? (
+                          <span className={`text-body font-medium tabular-nums ${pctColor(val)}`}>
+                            {pctStr(val)}
+                          </span>
+                        ) : (
+                          <div className="h-4 w-10 bg-bg-card-elevated rounded animate-pulse" />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {result?.spark && result.spark.length > 1 && (
+                  <SparkLine prices={result.spark.slice(-14)} />
+                )}
+              </div>
+            </div>
+
+            {/* 신뢰도 + 캐시 + risk_flags + 한국 dormant 경고 */}
+            {result && (
+              <div className="px-4 py-2 bg-bg-card-elevated border-t border-border-subtle flex items-center justify-between flex-wrap gap-1.5">
+                <div className="flex items-center gap-2.5 text-caption text-fg-tertiary">
+                  <span>신뢰도 <span className="text-fg-primary tabular-nums">{result.confidenceScore}%</span></span>
+                  <span>실시간 <span className="text-fg-primary tabular-nums">{result.liveCount}/{result.totalCount}</span></span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {result.cached && <span className="text-caption text-fg-tertiary">캐시됨</span>}
+                  {showKoreaDormantWarning && (
+                    <span
+                      title="K1~K8: KIS API 미연결 — K9~K12 (기술적 분석) 만으로 평가"
+                      className="text-micro px-1.5 py-0.5 bg-pending/10 border border-pending/30 text-pending rounded-sm font-medium"
+                    >
+                      ⚠ K1~K8 미수집
+                    </span>
+                  )}
+                  {result.risk_flags?.map((flag) => (
+                    <span key={flag}
+                      className="text-micro px-1.5 py-0.5 bg-pending/10 border border-pending/30 text-pending rounded-sm font-medium">
+                      ⚠ {flag}
+                    </span>
+                  ))}
+                </div>
+              </div>
             )}
 
-            {/* 가격 & 수익률 */}
-            <div className="flex-1 min-w-0 space-y-3">
-              {result?.price ? (
-                <div>
-                  <p className="text-2xl font-black text-white tabular-nums">
-                    {market === "korea"
-                      ? `${Math.round(result.price).toLocaleString("ko-KR")}원`
-                      : `$${result.price.toLocaleString("en-US", { maximumFractionDigits: 2 })}`}
-                  </p>
-                </div>
-              ) : (
-                <div className="h-8 bg-gray-800 rounded-lg w-28 animate-pulse" />
-              )}
-
-              {/* 7일 / 30일 수익률 배지 */}
-              <div className="flex gap-2">
-                {(["7일", "30일"] as const).map((label, i) => {
-                  const val = i === 0 ? result?.ret7d : result?.ret30d;
-                  return (
-                    <div key={label} className="flex flex-col">
-                      <span className="text-[10px] text-gray-400 mb-0.5">{label}</span>
-                      {val !== undefined && val !== null ? (
-                        <span className={`text-sm font-bold tabular-nums ${pctColor(val)}`}>
-                          {pctStr(val)}
-                        </span>
-                      ) : (
-                        <div className="h-5 w-12 bg-gray-800 rounded animate-pulse" />
-                      )}
-                    </div>
-                  );
-                })}
+            {/* 진입 영역 + AI 해설 */}
+            {result && (
+              <div className="px-4 py-3 border-t border-border-subtle space-y-2.5">
+                {result.entryZone && <EntryZoneCard zone={result.entryZone} market={market} />}
+                {signals.length >= 6 && (
+                  <AISummaryInline market={market} ticker={ticker} result={result} signals={signals} />
+                )}
               </div>
-
-              {/* 스파크라인 */}
-              {result?.spark && result.spark.length > 1 && (
-                <SparkLine prices={result.spark} />
-              )}
-            </div>
+            )}
           </div>
 
-          {/* 신뢰도 바 */}
+          {/* ── 시계열 카드 ── */}
           {result && (
-            <div className="px-5 py-3 bg-gray-900 border-t border-gray-800 flex items-center justify-between text-xs text-gray-500">
-              <div className="flex items-center gap-3">
-                <span>
-                  신뢰도 <span className="text-gray-200 font-bold">{result.confidenceScore}%</span>
-                </span>
-                <span>
-                  실시간 <span className="text-gray-200 font-bold">{result.liveCount}/{result.totalCount}</span>
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                {result.cached && <span className="text-gray-400">캐시됨</span>}
-                {result.risk_flags?.map((flag) => (
-                  <span
-                    key={flag}
-                    className="text-[10px] px-1.5 py-0.5 bg-orange-950 border border-orange-900 text-orange-400 rounded font-semibold"
-                  >
-                    ⚠ {flag}
-                  </span>
+            <ScoreHistorySparkline
+              history={result.history7d ?? []}
+              currentScore={result.score}
+            />
+          )}
+
+          {/* ── 알림 ── */}
+          {result && <AlertSection market={market} ticker={ticker} result={result} />}
+        </div>
+
+        {/* 우측 컬럼 (데스크톱) / 본문 하단 (모바일) */}
+        <div className="space-y-3 mt-3 lg:mt-0">
+
+          {/* ── 로딩 / 에러 ── */}
+          {loading && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded bg-bg-card border border-border-subtle">
+              <div className="w-3 h-3 border-2 border-signal-buy border-t-transparent rounded-full animate-spin flex-shrink-0" />
+              <span className="text-caption text-fg-secondary">신호 분석 중… <span className="tabular-nums">({signals.length}/12)</span></span>
+            </div>
+          )}
+          {error && (
+            <div className="px-3 py-2.5 bg-signal-sell/10 border border-signal-sell/30 rounded text-body text-signal-sell">
+              {error}
+            </div>
+          )}
+
+          {/* ── 거시경제 ── */}
+          <MacroCard market={market} />
+
+          {/* ── 신호 그룹 ── */}
+          {signals.length > 0 && groups.length > 0 && (
+            <div>
+              <p className="text-caption text-fg-secondary uppercase tracking-wider mb-2">12개 신호 상세</p>
+              <div className="space-y-2">
+                {groups.map((g) => (
+                  <SignalGroupCard key={g.label} group={g} signals={signals} market={market} />
                 ))}
-                <span className={`text-xs px-2 py-0.5 rounded-md border font-semibold ${scoreToBg(result.score)}`}>
-                  {result.label}
-                </span>
               </div>
+            </div>
+          )}
+
+          {/* ── 신호 로딩 스켈레톤 ── */}
+          {loading && signals.length === 0 && groups.length > 0 && (
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-20 bg-bg-card border border-border-subtle rounded-lg animate-pulse" />
+              ))}
             </div>
           )}
         </div>
 
-        {/* ── 로딩 ── */}
-        {loading && (
-          <div className="flex items-center gap-3 text-gray-400 mb-5 px-1">
-            <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-            <span className="text-sm">신호 분석 중… <span className="tabular-nums text-gray-400">({signals.length}/12)</span></span>
-          </div>
-        )}
-
-        {/* ── 에러 ── */}
-        {error && (
-          <div className="mb-5 p-4 bg-red-950 border border-red-900 rounded-xl text-red-300 text-sm">
-            {error}
-          </div>
-        )}
-
-        {/* ── 거시경제 맥락 ── */}
-        <MacroContextCard market={market} />
-
-        {/* ── 상위 드라이버 ── */}
-        {signals.length > 0 && <TopDrivers signals={signals} />}
-
-        {/* ── AI 해설 ── */}
-        {result && signals.length >= 6 && (
-          <AiCommentSection market={market} ticker={ticker} result={result} signals={signals} />
-        )}
-
-        {/* ── 알림 설정 ── */}
-        {result && <AlertSection market={market} ticker={ticker} result={result} />}
-
-        {/* ── 구분선 ── */}
-        {groups.length > 0 && signals.length > 0 && (
-          <div className="border-t border-gray-800 pt-5 mb-5">
-            <SectionLabel>12개 신호 상세</SectionLabel>
-            <div className="space-y-2">
-              {groups.map((g) => (
-                <SignalGroup key={g.label} group={g} signals={signals} visibleIds={visibleIds} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 스켈레톤 */}
-        {loading && signals.length === 0 && groups.length > 0 && (
-          <div className="space-y-2 mb-5">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-14 bg-gray-900 border border-gray-800 rounded-xl animate-pulse" />
-            ))}
-          </div>
-        )}
-
-        {/* 미분류 신호 폴백 */}
-        {groups.length === 0 && signals.length > 0 && (
-          <div className="space-y-4 mb-5">
-            {signals.map((s) => (
-              <SignalBar key={s.id} signal={s} visible={visibleIds.has(s.id)} />
-            ))}
-          </div>
-        )}
-
         {/* ── 푸터 ── */}
         {result && (
-          <div className="pt-4 border-t border-gray-800/50 text-xs text-gray-400 space-y-1">
+          <div className="lg:col-span-2 mt-4 pt-3 border-t border-border-subtle text-micro text-fg-tertiary space-y-0.5">
             <div className="flex items-center justify-between">
               <span>{result.modelVersion}</span>
               <span>{new Date(result.evaluatedAt).toLocaleString("ko-KR")}</span>
             </div>
-            <p>이 서비스는 참고용 정보 제공 목적으로만 운영됩니다. 투자 판단의 책임은 사용자 본인에게 있습니다.</p>
+            <p>참고용 정보. 투자 판단의 책임은 사용자 본인에게 있습니다.</p>
           </div>
         )}
-
       </div>
     </main>
   );

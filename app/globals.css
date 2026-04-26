@@ -2,11 +2,29 @@
 @tailwind components;
 @tailwind utilities;
 
+/* docs/design/SCORE_PAGE.md §1 — 토큰 단일 진실. tailwind.config.ts 와 동기화. */
+:root {
+  --signal-strong-buy: 16 185 129;   /* #10b981 */
+  --signal-buy:        52 211 153;   /* #34d399 */
+  --signal-neutral:    107 114 128;  /* #6b7280 */
+  --signal-sell:       248 113 113;  /* #f87171 */
+  --signal-strong-sell:220 38 38;    /* #dc2626 */
+  --pending-zone:      245 158 11;   /* #f59e0b */
+  --ai-accent:         167 139 250;  /* #a78bfa */
+  --bg-primary:        10 10 12;     /* #0a0a0c */
+  --bg-card:           19 19 24;     /* #131318 */
+  --bg-card-elevated:  26 26 32;     /* #1a1a20 */
+  --border-subtle:     31 32 36;     /* #1f2024 */
+  --text-primary:      231 231 233;  /* #e7e7e9 */
+  --text-secondary:    156 156 160;  /* #9c9ca0 */
+  --text-tertiary:     108 108 112;  /* #6c6c70 */
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {
-  background: #0B0E14;
-  color: #E8ECF4;
+  background: rgb(var(--bg-primary));
+  color: rgb(var(--text-primary));
   font-family: 'Pretendard Variable', Pretendard, -apple-system, sans-serif;
   min-height: 100vh;
   max-width: 100vw;

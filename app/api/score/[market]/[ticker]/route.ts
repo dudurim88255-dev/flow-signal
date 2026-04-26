@@ -16,6 +16,8 @@ import { savePrediction, today, type Market as PredMarket } from "@/lib/predicti
 import { runRiskGate } from "@/lib/signals/riskgate";
 import { loadRiskGateData } from "@/lib/signals/riskgate-loader";
 import { confidenceScoreToLabel } from "@/lib/signals/types";
+import { calculateEntryZone, type EntryZoneResult } from "@/lib/signals/entryZone";
+import { getScoreHistory7d } from "@/lib/signals/scoreHistory";
 
 export const runtime = "nodejs";
 
@@ -36,6 +38,33 @@ function calcConfidence(signals: SignalScore[]): number {
 
 function sseEvent(type: string, data: unknown): string {
   return `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
+/**
+ * entryZone 계산 — spark 가 20 미만이면 null. 데이터 부족은 비치명.
+ */
+function computeEntryZoneSafe(
+  score: number,
+  prices: number[],
+  currentPrice: number
+): EntryZoneResult | null {
+  if (!prices || prices.length < 20 || !currentPrice) return null;
+  try {
+    return calculateEntryZone({ score, prices, currentPrice });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * scoreHistory 7d — Redis 실패는 빈 배열 fallback (페이지 측 placeholder 처리).
+ */
+async function getScoreHistory7dSafe(market: Market, ticker: string): Promise<number[]> {
+  try {
+    return await getScoreHistory7d(market, ticker);
+  } catch {
+    return [];
+  }
 }
 
 export async function GET(
@@ -91,6 +120,13 @@ export async function GET(
             ? parsed.confidenceScore
             : (typeof parsed.confidence === "number" ? parsed.confidence : 50);
           const cachedLabel = parsed.confidenceLabel ?? confidenceScoreToLabel(cachedScore);
+          // entryZone — 캐시된 spark 가 ≥20 이면 계산. 미만이면 null.
+          const cachedEntryZone = computeEntryZoneSafe(
+            parsed.score,
+            parsed.spark ?? [],
+            parsed.price ?? 0
+          );
+          const cachedHistory = await getScoreHistory7dSafe(market, ticker);
           enqueue("result", {
             score: parsed.score,
             label: parsed.label,
@@ -107,6 +143,8 @@ export async function GET(
             name: parsed.name ?? "",
             cached: true,
             risk_flags: parsed.risk_flags ?? undefined,
+            entryZone: cachedEntryZone,
+            history7d: cachedHistory,
           });
           safeClose();
           return;
@@ -180,6 +218,8 @@ export async function GET(
           console.warn(`[score] 예측 저장 실패 ${market}/${ticker}:`, err instanceof Error ? err.message : err)
         );
 
+        const liveEntryZone = computeEntryZoneSafe(result.score, result.spark, result.price);
+        const liveHistory = await getScoreHistory7dSafe(market, ticker);
         enqueue("result", {
           score: result.score,
           label: result.label,
@@ -196,6 +236,8 @@ export async function GET(
           name: result.name,
           cached: false,
           risk_flags: riskFlags,
+          entryZone: liveEntryZone,
+          history7d: liveHistory,
         });
       } catch (err) {
         console.error(`[score] ${market}/${ticker} 평가 실패:`, err);
