@@ -82,11 +82,13 @@
 
 ```
 서비스: KRX OPEN API
-키 이름: KRX_OPEN_API_KEY
+키 이름: KRX_API_KEY
 값: (복사한 인증키)
 발급일: 2026-MM-DD
 용도: FlowSignal Phase A K1~K8 fetcher
 ```
+
+> 변수명 `KRX_API_KEY` (KRX_OPEN_API_KEY 아님) — 흥권 박제 ground truth, ADR 006 Phase 1 §3 정합 (2026-05-04 update).
 
 > 📸 **스크린샷 시점**: 인증키 표시 화면 (단, **이미지 자체에 키 본문이 보이면 절대 공유 금지**. 본인 1Password 첨부 정도만)
 
@@ -196,7 +198,7 @@ KIS_BASE_URL: https://openapivts.koreainvestment.com:29443
 
 | Name | Value |
 |---|---|
-| `KRX_OPEN_API_KEY` | KRX 인증키 |
+| `KRX_API_KEY` | KRX 인증키 |
 | `KIS_APP_KEY` | KIS App Key |
 | `KIS_APP_SECRET` | KIS App Secret |
 | `KIS_ACCOUNT_NUMBER` | KIS 계좌번호 (예: `50068923-01`) |

@@ -1,7 +1,8 @@
 # ADR 006 — Korea Market Signals Data Sources
 
-**Status**: Proposed (흥권님 검토 후 Accepted 로 변경)
+**Status**: Accepted (2026-05-04 흥권 키 등록 완료, Phase 2 부분 진입)
 **Date**: 2026-04-25
+**Accepted**: 2026-05-04
 **Deciders**: 흥권
 **Supersedes**: ADR 004 부분 수정 — "한국 주식: Yahoo Finance" 단일 소스 정책에 KRX OPEN API + KIS Open API 추가
 
@@ -94,7 +95,7 @@
 3. 발급 후 secrets 등록:
    - GitHub repo Settings > Secrets and variables > Actions
    - Vercel Project Settings > Environment Variables (Phase 4 의 `/api/score` 라우트에서도 KIS/KRX 사용 가능성 대비)
-   - 키: `KRX_OPEN_API_KEY`, `KIS_APP_KEY`, `KIS_APP_SECRET`, `KIS_ACCOUNT_TYPE` (`mock` | `real`)
+   - 키: `KRX_API_KEY` (2026-05-04 박제 ground truth — Vercel Production+Preview / GHA Secrets / .env.local 3곳 동시 박제), `KIS_APP_KEY`, `KIS_APP_SECRET`, `KIS_ACCOUNT_TYPE` (`mock` | `real`)
 4. Phase 1 완료 신호: 흥권님이 키 등록 후 ADR Status 를 "Accepted" 로 변경하며 Phase 2 PR 트리거
 
 ### Phase 2 — fetcher 신설 (Claude Code 작업)
@@ -134,7 +135,7 @@ lib/signals/fetchers/
 
 `vercel.json` `crons` 배열에서 위 4개 항목 제거. `/api/cron/*` 라우트는 보존 (GitHub Actions 가 HTTP POST 로 호출하는 형태로도 사용 가능). 인증은 기존 `CRON_SECRET` 헤더 동일.
 
-GitHub Actions 환경변수: `KRX_OPEN_API_KEY`, `KIS_APP_KEY`, `KIS_APP_SECRET`, `KIS_ACCOUNT_TYPE`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `CRON_SECRET`, `ANTHROPIC_API_KEY` (narrate 용).
+GitHub Actions 환경변수: `KRX_API_KEY`, `KIS_APP_KEY`, `KIS_APP_SECRET`, `KIS_ACCOUNT_TYPE`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `CRON_SECRET`, `ANTHROPIC_API_KEY` (narrate 용).
 
 ### Phase 4 — live 활성화 (Claude Code 작업)
 
@@ -369,4 +370,4 @@ KIS 모의투자 정책: 3개월 만료, 갱신 불가. 새 키 재발급만 가
 
 ---
 
-*Status: Proposed. 흥권님 검토 후 "Accepted" 변경 + Phase 1 인증키 발급 시작.*
+*Status: Accepted (2026-05-04). Phase 1 키 등록 완료 → Phase 2 부분 진입 (auth.ts 골격만, flow/sector 는 portal endpoint docs 박제 후 별 PR).*
