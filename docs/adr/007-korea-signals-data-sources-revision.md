@@ -117,23 +117,59 @@ ADR 008 박제: `docs/adr/008-k4-foreign-holding-ratio-data-source.md` — 흥�
 1. **monotonic improvement** — 작동 중인 거 안 건드림. CLAUDE.md §1.1 "다운그레이드/우회/포기 절대 금지" + 정신 정합 (검증 안된 변경 강행 X).
 2. **Yahoo 데이터 품질 문제 보고 0건** — KRX 갈아끼는 정당화 근거 없음.
 3. **baseline Track A/B 분리 부담 회피** — ADR 006 §Baseline Impact 의 더미 baseline (Track A) / 실값 baseline (Track B) 분리 운영이 이미 K1~K8 활성화로 발생. OHLCV 까지 변경 시 Track 추가 분기 → evolve cron 학습 데이터 단절 가중.
-4. **5/27 정상화 일정 안정화** — Phase 2-A/2-B 박제 + Phase 4 live 활성화 일정 정합. OHLCV 변경 시 baseline 재시작 비용.
+4. **5/27 정상화 일정 안정화** — Phase 2-B 박제 + Phase 4 live 활성화 일정 정합. OHLCV 변경 시 baseline 재시작 비용.
+
+**KRX 인증키 폐기 박제 (2026-05-04)**:
+- KRX OPEN API "주식" 카테고리 8 endpoint = OHLCV-B 검토 시 사용 후보였으나 **본 결정 = OHLCV-A 채택 = KRX 의존 0**
+- 흥권 KRX 인증키 폐기 + 등록 3곳 (GHA Secrets / Vercel env / .env.local) 철회 완료
+- `lib/signals/fetchers/krx/auth.ts` (commit `1eabbe7`) = git history 보존, archive 박제 (`lib/signals/fetchers/krx/README.md`)
+- ADR 009 K12-B (KRX 재발급 후 산업별지수) 도 본 폐기 정합 — 채택 시 KRX 인증키 재발급 필요
 
 **미래 트리거 조건** (현 시점 결정 사안 X, 10/24 강결론 후 재검토):
 - 10/24 baseline 강결론 후 evolve 결과 read (메모리 23 Stage 2-4 진화 경로 정합)
 - 한국 종목 K9~K12 (Yahoo OHLCV 기반 신호) 성능이 미국/crypto 대비 저조 시 → **OHLCV-B 검토 cycle 진입**
+  - 트리거 시 흥권 **KRX 인증키 재발급** 필요 (회원가입은 보존, 신규 인증키 신청 1일 승인)
+  - auth.ts 골격 그대로 재활용 (변수명 `KRX_API_KEY` 정합)
 - OHLCV-C (KRX 단일) 는 휴장일/시간대 처리 부담으로 영구 기각
 
-→ Decision 5 = OHLCV-A 확정. KRX OPEN API "주식" 카테고리 8 endpoint 는 본 ADR 범위 외 (10/24 후 별 cycle 검토 가능).
+→ Decision 5 = OHLCV-A 확정. KRX 의존 0 + 인증키 폐기 정합. KRX OPEN API "주식" 카테고리 8 endpoint 는 본 ADR 범위 외 (10/24 후 별 cycle 검토 + 재발급 트리거).
 
-### Decision 6 — KIS 키 의존도 (재정비 후 ↑)
+### Decision 6 — KIS 키 의존도 + 보안 정책 강화 (실전 채택)
 
-K1~K3, K5~K8 모두 KIS = KIS App Key/Secret 1쌍 의존도 100%. ADR 006 §6 의 모의투자 우선 정책 + ACNT_PWD 미등록 룰 유지.
+흥권 결정 (2026-05-04): **실전 KIS 키 채택 (계좌 44406404).** ADR 006 §Decision §6 "모의투자 우선" 정정.
 
-추가 보호:
+**채택 근거 — 흥권 본질 박제**:
+- **"매매 안 함, 데이터 받기 전용"** = FlowSignal 정체성 정합 (시그널 제공 SaaS, 매매 집행 X)
+- 모의투자 시세 정확도 부족 가능성 (ADR 006 §Open Q #1) — 실전 시세로 baseline 정확도 확보
+- 모의투자 3개월 만료 + 갱신 불가 = 운영 부담 회피 (ADR 006 §Q6 Decision Detail 의 모의 갱신 자동화 보다 단순)
+- **자산 위험 0** = 다음 보안 정책 4 단계 강제
+
+**보안 정책 4 단계 (실전 키 채택 후 자산 위험 0 보장)**:
+
+1. **ACNT_PWD 절대 등록 X** (ADR 006 §Q6 ACNT_PWD 미등록 룰 강제 유지)
+   - 환경변수에 `KIS_*_ACNT_PWD` 형식 변수 등록 X
+   - 코드베이스 (commit/working tree) 에 계좌 비밀번호 평문/암호화 모두 등장 X
+   - 정기 grep: `grep -r "ACNT_PWD\|acnt_pwd\|account_password" .` 결과 0건 유지
+2. **계좌 조회 endpoint 호출 금지** (본 cycle 강화)
+   - `/uapi/domestic-stock/v1/trading/order-cash` 등 주문 endpoint 사용 금지 (영원)
+   - `/uapi/domestic-stock/v1/trading/inquire-balance` 등 계좌 잔고 조회 endpoint 호출 금지
+   - 시세/수급 조회 endpoint (`/uapi/domestic-stock/v1/quotations/*`) 만 사용
+   - 정기 grep: 별 cycle 검증 트리거 박제
+3. **App Secret 노출 모니터링** — GitHub secret scanning 활성화 + Vercel/GHA secrets 외 박제 X
+4. **abnormal usage 알림 채널 확인** — KIS 측 의심 활동 감지 알림이 흥권 등록 이메일 (KIS Developers 가입 시) 로 전달 확인
+
+**환경변수 5 변수 spec (실전 채택 정합)**:
+- `KIS_APP_KEY` — KIS Developers 실전 앱 (44406404) App Key
+- `KIS_APP_SECRET` — 동상 App Secret
+- `KIS_BASE_URL` — `https://openapi.koreainvestment.com:9443` (실전, 모의 URL 미사용)
+- `KIS_ACCOUNT_NO` — `44406404` (8자리, 흥권 박제)
+- `KIS_ACCOUNT_PRODUCT_CD` — `01` (KIS 종합계좌 표준)
+
+**의존도 100% 단일점 위험 완화**:
 - KIS access_token Redis 캐시 (`kis:access_token` TTL 24h, distributed lock `kis:token_lock`) — ADR 006 §Cache Strategy 정합
-- KIS API 장애 시 last-good-known 24h fallback — ADR 006 §Fallback Policy 정합 (KRX 측 fallback 항목은 K12 + sector 만 적용)
-- KIS rate limit 초당 20 (실전) / 더 낮음 (모의) → 100 종목 × 7 신호 = 700 호출/일, 35초 내 완료 (실전), 모의 실측 필요
+- KIS API 장애 시 last-good-known 24h fallback — ADR 006 §Fallback Policy 정합
+- KIS rate limit 실전 초당 20 → 100 종목 × 7 신호 = 700 호출/일, 35초 내 완료
+- 의심 활동 감지 = ACNT_PWD 미박제 + 계좌 조회 endpoint 미호출 = 자산 탈취 경로 0
 
 ### Decision 7 — Phase 2 재구성
 

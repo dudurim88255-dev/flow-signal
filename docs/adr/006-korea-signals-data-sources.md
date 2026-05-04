@@ -1,10 +1,10 @@
 # ADR 006 — Korea Market Signals Data Sources
 
-**Status**: Accepted (2026-05-04 흥권 키 등록 완료, Phase 2 부분 진입)
+**Status**: Accepted (2026-05-04, partial supersede by ADR 007 + ADR 008 + ADR 009 + KRX 폐기 박제)
 **Date**: 2026-04-25
 **Accepted**: 2026-05-04
 **Deciders**: 흥권
-**Supersedes**: ADR 004 부분 수정 — "한국 주식: Yahoo Finance" 단일 소스 정책에 KRX OPEN API + KIS Open API 추가
+**Supersedes**: ADR 004 부분 수정 — "한국 주식: Yahoo Finance" 단일 소스 정책에 KIS Open API 추가 (KRX OPEN API 부분 폐기, 2026-05-04)
 
 ---
 
@@ -35,19 +35,19 @@
 
 본 ADR 은 다음 7개 결정을 확정한다.
 
-| # | 항목 | 결정 |
-|---|---|---|
-| 1 | 데이터 소스 조합 | **안 A 하이브리드**: KRX OPEN API + KIS Open API |
-| 2 | K1, K2, K3, K4, K5, K6, K8 출처 | **KRX OPEN API** (`openapi.krx.co.kr`) — 1차 공식 출처 |
-| 3 | K7 (종목별 신용잔고) 출처 | **KIS Open API** (`/uapi/domestic-stock/v1/quotations/daily-credit-balance`) |
-| 4 | 금지 경로 | **KRX OTP+CSV / pykrx 류 운영 사용 금지** — KRX 명시적 IP 차단 정책 |
-| 5 | 인프라 | **GitHub Actions** 로 harvest 이전 — Vercel Hobby `maxDuration` 10s · cron 2개 한도 회피 |
-| 6 | KIS 계좌 종류 | **모의투자 우선** + ACNT_PWD 미등록 룰 + 만료 알림 자동화 (상세는 §Q6 Decision Detail 참조) |
-| 7 | 종목 확장 | **30 → 100 단계적**, 1000 은 baseline (10/24) 통과 후 |
+| # | 항목 | 결정 | 본 ADR 후속 |
+|---|---|---|---|
+| 1 | 데이터 소스 조합 | ~~**안 A 하이브리드**: KRX OPEN API + KIS Open API~~ | **부정 (2026-05-04)** — KIS Open API 단일 (ADR 007 §D1) + KRX 폐기 박제 |
+| 2 | K1, K2, K3, K4, K5, K6, K8 출처 | ~~**KRX OPEN API**~~ | **부정 (2026-05-04)** — KIS K1~K3, K5~K8 (ADR 007 §D1·D2). K4 = ADR 008 별 cycle |
+| 3 | K7 (종목별 신용잔고) 출처 | **KIS Open API** (`/uapi/domestic-stock/v1/quotations/daily-credit-balance`) | 유지 |
+| 4 | 금지 경로 | **KRX OTP+CSV / pykrx 류 운영 사용 금지** — KRX 명시적 IP 차단 정책 | 유지 |
+| 5 | 인프라 | **GitHub Actions** 로 harvest 이전 — Vercel Hobby `maxDuration` 10s · cron 2개 한도 회피 | 유지 |
+| 6 | KIS 계좌 종류 | ~~**모의투자 우선**~~ | **정정 (2026-05-04)** — 실전 채택 (44406404) + ACNT_PWD 미등록 룰 강화 + **계좌 조회 endpoint 호출 금지** + 흥권 본질 "매매 안 함, 데이터 받기 전용" 박제 (ADR 007 §D6) |
+| 7 | 종목 확장 | **30 → 100 단계적**, 1000 은 baseline (10/24) 통과 후 | 유지 |
 
 추가 결정:
-- **K12 sectorRet20d 동시 활성화**: KRX 산업별지수 fetcher 를 K1~K8 fetcher 와 같은 PR 에 신설
-- **유료화/SaaS TOS 검토**: 2026-10-24 무료 베타 종료 후 KRX/KIS 데이터사업부 직접 문의 (본 ADR 범위 외)
+- ~~**K12 sectorRet20d 동시 활성화**: KRX 산업별지수 fetcher~~ → **부정 (2026-05-04)** — KRX 산업별지수 portal 미발견 (ADR 009 §D3 부분 부정). K12 출처 = ADR 009 별 cycle.
+- **유료화/SaaS TOS 검토**: 2026-10-24 무료 베타 종료 후 KIS 데이터사업부 직접 문의 (본 ADR 범위 외, KRX 부분 폐기로 KIS 단독 문의)
 
 ---
 
@@ -95,7 +95,7 @@
 3. 발급 후 secrets 등록:
    - GitHub repo Settings > Secrets and variables > Actions
    - Vercel Project Settings > Environment Variables (Phase 4 의 `/api/score` 라우트에서도 KIS/KRX 사용 가능성 대비)
-   - 키: `KRX_API_KEY` (2026-05-04 박제 ground truth — Vercel Production+Preview / GHA Secrets / .env.local 3곳 동시 박제), `KIS_APP_KEY`, `KIS_APP_SECRET`, `KIS_ACCOUNT_TYPE` (`mock` | `real`)
+   - 키: ~~`KRX_API_KEY`~~ (**폐기 2026-05-04** — 흥권 사이트 인증키 폐기 + 3곳 등록 철회 완료), `KIS_APP_KEY`, `KIS_APP_SECRET`, `KIS_BASE_URL`, `KIS_ACCOUNT_NO` (8자리), `KIS_ACCOUNT_PRODUCT_CD` (01) — ADR 007 §D6 정정 후 5 변수 spec (ACNT_PWD / ACCOUNT_TYPE 미등록)
 4. Phase 1 완료 신호: 흥권님이 키 등록 후 ADR Status 를 "Accepted" 로 변경하며 Phase 2 PR 트리거
 
 ### Phase 2 — fetcher 신설 (Claude Code 작업)

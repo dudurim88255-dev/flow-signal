@@ -70,19 +70,25 @@ ADR 008 (K4) 와 동일 패턴 — 추측 위 결정 → portal 실측 검증 �
 - `inquire-price` (종목 시세) 응답의 `bstp_kor_isnm` (업종 한글명) 필드 확인
 - 산업별지수 시계열 (closes 배열) endpoint 가능성
 
-### K12-B — KRX 산업별지수 (krx_dd_trd 검증 후)
+### K12-B — KRX 산업별지수 (KRX 재발급 후)
 
 | 항목 | 값 |
 |---|---|
 | 출처 | KRX OPEN API "주식" 카테고리 krx_dd_trd 응답 + "지수" 카테고리 산업별지수 (가능 시) |
-| 박제 상태 | krx_dd_trd 응답 schema 미박제, "지수" 카테고리 산업별지수 portal 미발견 |
-| 정확도 | TBD (KRX portal 박제 후 확정) |
-| 리스크 | 0 (이미 KRX_API_KEY 박제 완료) |
+| 박제 상태 | KRX 인증키 폐기 (2026-05-04, 흥권 결정) — **재발급 + 재등록 필요** |
+| 정확도 | TBD (KRX 재발급 + portal 박제 후 확정) |
+| 리스크 | 재발급 1일 승인 대기 + 회원가입 절차 (보존됨, 신규 인증키 신청만) |
 | weight 영향 | 가능 시 정확 |
-| 박제 비용 | 중 — KRX portal 박제 + sector.ts 박제 + 종목→업종 매핑 |
-| 권장도 | 🟡 KRX portal 박제 후 krx_dd_trd 결과 + 지수 카테고리 명세 read 후 확정 |
+| 박제 비용 | 중 — KRX 재발급 + portal 박제 + sector.ts 박제 + 종목→업종 매핑 |
+| 권장도 | 🟡 KRX 재발급 정합성 검토 후 채택 가능. 본 cycle 채택 시 흥권 KRX 사이트 재진입 필요 |
 
-**조사 필요 항목**:
+**선결 조건** (본 옵션 채택 시):
+1. 흥권 KRX 사이트 (https://openapi.krx.co.kr/) 재로그인 → 인증키 신청 (회원가입 보존)
+2. 약 1일 승인 대기
+3. 환경변수 `KRX_API_KEY` 3곳 (GHA Secrets + Vercel env + .env.local) 재등록
+4. `lib/signals/fetchers/krx/auth.ts` (commit `1eabbe7` 박제, `lib/signals/fetchers/krx/README.md` archive) 재활성화
+
+**조사 필요 항목** (재발급 후):
 - KRX OPEN API "주식" 카테고리 8개 endpoint 중 종목별 업종코드 포함 응답 (krx_dd_trd 또는 동등)
 - "지수" 카테고리 5개 endpoint 의 정확 spec — 산업별지수 endpoint 존재 여부
 - 산업별지수 미존재 시 → KOSPI 200 / KOSDAQ 시장지수 만 가능 (K12-C 분기)
@@ -123,12 +129,12 @@ ADR 008 (K4) 와 동일 패턴 — 추측 위 결정 → portal 실측 검증 �
 
 흥권 결정 대기. 본 ADR 박제 시점 (2026-05-04) 미결정.
 
-**Claude 권고 시퀀스** (참고용, 흥권 결정 우선):
-1. **KIS portal + KRX portal 박제 우선** — K12-A 와 K12-B 동시 검증.
-2. **KIS portal 발견 + KIS sector endpoint 가능 시** → K12-A 채택. KIS 단일 (K1~K8 + K12) 운영 단순화.
-3. **KIS 미발견 + KRX 발견 시** → K12-B 채택. krx_dd_trd 응답 schema 박제 후 fetcher 진입.
-4. **양쪽 모두 미발견 시** → K12-C 채택 (KOSPI 200 단일 의미 약화 수용) 또는 K12-D (폐기).
-5. **시간 우선 시** → K12-C 즉시 박제 (Yahoo Finance fetcher 확장만, K12 활성화 의미 부분 회복).
+**Claude 권고 시퀀스** (참고용, 흥권 결정 우선) — KRX 인증키 폐기 (2026-05-04) 정합:
+1. **KIS portal 박제 우선** — K12-A 검증 (실전 키 등록 후 자연 발생).
+2. **KIS portal 발견 + KIS sector endpoint 가능 시** → K12-A 채택. KIS 단일 (K1~K3, K5~K8 + K12) 운영 단순화 + KRX 재발급 회피.
+3. **KIS 미발견 시** → K12-C 채택 (KOSPI 200 단일 의미 약화 수용) — KRX 재발급 회피 + 즉시 박제 가능 (Yahoo Finance fetcher 확장만).
+4. **K12-B (KRX 재발급)** = K12-A/C 모두 부족할 때만 진입 — 재발급 1일 대기 + 운영 복잡도 ↑. 본질적으로 회피 권고.
+5. **K12-D (폐기)** = K12-A/B/C 모두 미가능 시 마지막 폴백.
 
 ---
 
