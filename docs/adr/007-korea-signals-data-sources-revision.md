@@ -72,7 +72,7 @@ ADR 006 §Open Q #2 도 동일 우려 명시:
 | K1~K3, K5~K8 (7 신호) | **KIS Open API** (단일) |
 | K4 (외국인 보유율 Δ) | **본 ADR 범위 외 — ADR 008 cycle 에서 별도 결정** (Decision 4 참조) |
 | K12 (산업별지수) | **KRX OPEN API** (지수 카테고리) |
-| OHLCV (Yahoo Finance 대체 검토) | **결정 분기** (Decision 5) |
+| OHLCV (한국 종목) | **Yahoo Finance 유지** (Decision 5 = OHLCV-A) — ADR 004 정합 |
 
 ### Decision 2 — KIS 우선 정합
 
@@ -98,17 +98,22 @@ ADR 008 박제: `docs/adr/008-k4-foreign-holding-ratio-data-source.md` — 흥�
 - Phase 4 `evaluateKorea` 의 K4Live = false 단기 강제 (ADR 008 결정 전까지)
 - ADR 008 Accepted 후 K4 fetcher 별 cycle 박제
 
-### Decision 5 — OHLCV 출처 결정 분기
+### Decision 5 — OHLCV 출처 = OHLCV-A (Yahoo Finance 유지)
 
-KRX OPEN API "주식" 카테고리 8개 endpoint = OHLCV / 종목기본정보 / 시가총액 등 제공. **Yahoo Finance 대체 가능성** 검토 의제.
+흥권 결정 (2026-05-04): **OHLCV-A 채택. ADR 004 정합 유지.**
 
-| 옵션 | 설명 | 권장도 |
-|---|---|---|
-| **OHLCV-A** | Yahoo Finance 유지 (현 상태) | 🟢 단순, 추가 작업 0 |
-| **OHLCV-B** | KRX OPEN API "주식" 카테고리로 일부 대체 (정확도 ↑ 가능) | 🟡 검증 cycle 필요 |
-| **OHLCV-C** | KRX 단일 (Yahoo Finance 폐기) | 🔴 휴장일/시간대 처리 추가 부담 |
+채택 근거:
+1. **monotonic improvement** — 작동 중인 거 안 건드림. CLAUDE.md §1.1 "다운그레이드/우회/포기 절대 금지" + 정신 정합 (검증 안된 변경 강행 X).
+2. **Yahoo 데이터 품질 문제 보고 0건** — KRX 갈아끼는 정당화 근거 없음.
+3. **baseline Track A/B 분리 부담 회피** — ADR 006 §Baseline Impact 의 더미 baseline (Track A) / 실값 baseline (Track B) 분리 운영이 이미 K1~K8 활성화로 발생. OHLCV 까지 변경 시 Track 추가 분기 → evolve cron 학습 데이터 단절 가중.
+4. **5/27 정상화 일정 안정화** — Phase 2-A/2-B 박제 + Phase 4 live 활성화 일정 정합. OHLCV 변경 시 baseline 재시작 비용.
 
-**Claude 권고**: **OHLCV-A 유지** (단순). KRX OPEN API "주식" 카테고리는 본 ADR 범위 외 별 cycle 검토 (Phase 5 모니터링 후).
+**미래 트리거 조건** (현 시점 결정 사안 X, 10/24 강결론 후 재검토):
+- 10/24 baseline 강결론 후 evolve 결과 read (메모리 23 Stage 2-4 진화 경로 정합)
+- 한국 종목 K9~K12 (Yahoo OHLCV 기반 신호) 성능이 미국/crypto 대비 저조 시 → **OHLCV-B 검토 cycle 진입**
+- OHLCV-C (KRX 단일) 는 휴장일/시간대 처리 부담으로 영구 기각
+
+→ Decision 5 = OHLCV-A 확정. KRX OPEN API "주식" 카테고리 8 endpoint 는 본 ADR 범위 외 (10/24 후 별 cycle 검토 가능).
 
 ### Decision 6 — KIS 키 의존도 (재정비 후 ↑)
 
@@ -262,7 +267,7 @@ async function evaluateKorea(meta: TickerMeta, onStep?: StepCallback) {
 1. **K4 결정** — 본 ADR 범위 외, ADR 008 cycle 에서 별도 결정.
 2. **KIS 모의 시세 정확도** — Phase 2-B 직후 1회 실측 필요. ADR 006 §Open Q #1 정합 유지.
 3. **KRX OPEN API "지수" 카테고리 5개 정확 endpoint** — 흥권 portal docs 박제 후 (research-krx-openapi-endpoints-2026-05-04.md §3 screenshot 9건 + 31개 명세).
-4. **OHLCV 대체 결정** (Decision 5) — Phase 5 모니터링 후 별 cycle.
+4. **OHLCV 대체 결정** — Decision 5 = OHLCV-A 확정 (Yahoo Finance 유지). 미래 트리거: 10/24 baseline 강결론 후 K9~K12 성능 저조 시 OHLCV-B 검토 (Decision 5 본문 박제).
 5. **KRX/KIS SaaS 재배포 라이선스** — ADR 006 §Open Q #6 정합 유지 (무료 베타 ~2026-10-24 종료 전 양쪽 직접 문의).
 6. **KIS rate limit 모의 계좌 정확 한도** — Phase 2-B 직후 실측.
 
@@ -270,11 +275,12 @@ async function evaluateKorea(meta: TickerMeta, onStep?: StepCallback) {
 
 ## Compliance check (PR 머지 전 흥권 점검 항목)
 
-- [ ] 흥권 본 ADR Decision 5 (OHLCV) 답변
+- [x] 흥권 본 ADR Decision 5 (OHLCV) 답변 — 2026-05-04 OHLCV-A 채택
 - [ ] ADR 008 (K4) 별 cycle 진행 박제
 - [ ] PR 본문에 "supersedes ADR 006 §Decision §1, §2 partial" 인용
 - [ ] ADR 006 본문에 cross-reference 추가 (`Status: Accepted (2026-05-04, partial supersede by ADR 007 + ADR 008)`)
 - [ ] research-krx-openapi-endpoints-2026-05-04.md 의 §3 screenshot path + §2 31개 endpoint 명세 박제
+- [ ] 흥권 ADR 007 Status `Proposed` → `Accepted` 전환 결정
 
 ---
 
