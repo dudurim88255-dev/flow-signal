@@ -1,7 +1,8 @@
 # ADR 007 — Korea Market Signals Data Sources (Revision)
 
-**Status**: Proposed (흥권 검토 후 Accepted)
+**Status**: Accepted (2026-05-04 — Decision 1~8 박제 완료, Phase 2 공식 진입 트리거)
 **Date**: 2026-05-04
+**Accepted**: 2026-05-04
 **Deciders**: 흥권
 **Supersedes**: ADR 006 §Decision §1, §2 (부분 supersede — KRX OPEN API 의 K1~K8 매핑 가정 부정)
 **Trigger**: 흥권 KRX OPEN API portal 실측 (`docs/research-krx-openapi-endpoints-2026-05-04.md`) — KRX OPEN API 31개 endpoint 전체가 OHLCV/시세 데이터만 제공, K1~K8 (외국인/기관/공매도/대차/신용/거래원) 0건 미제공 catch.
@@ -280,7 +281,7 @@ async function evaluateKorea(meta: TickerMeta, onStep?: StepCallback) {
 - [ ] PR 본문에 "supersedes ADR 006 §Decision §1, §2 partial" 인용
 - [ ] ADR 006 본문에 cross-reference 추가 (`Status: Accepted (2026-05-04, partial supersede by ADR 007 + ADR 008)`)
 - [ ] research-krx-openapi-endpoints-2026-05-04.md 의 §3 screenshot path + §2 31개 endpoint 명세 박제
-- [ ] 흥권 ADR 007 Status `Proposed` → `Accepted` 전환 결정
+- [x] 흥권 ADR 007 Status `Proposed` → `Accepted` 전환 — 2026-05-04 완료
 
 ---
 
@@ -306,4 +307,4 @@ async function evaluateKorea(meta: TickerMeta, onStep?: StepCallback) {
 
 ---
 
-*Status: Proposed (2026-05-04). 흥권 검토 후 "Accepted" 변경 + Phase 1.5 KIS 키 등록 + Phase 2-A/2-B 진입. K4 (Phase 2-C) 는 ADR 008 별 cycle.*
+*Status: Accepted (2026-05-04). Decision 1~8 박제 완료. Phase 2-A/2-B 공식 진입 트리거. K4 (Phase 2-C) 는 ADR 008 별 cycle.*
