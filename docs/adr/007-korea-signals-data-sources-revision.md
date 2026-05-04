@@ -72,16 +72,26 @@ ADR 006 §Open Q #2 도 동일 우려 명시:
 |---|---|
 | K1~K3, K5~K8 (7 신호) | **KIS Open API** (단일) |
 | K4 (외국인 보유율 Δ) | **본 ADR 범위 외 — ADR 008 cycle 에서 별도 결정** (Decision 4 참조) |
-| K12 (산업별지수) | **KRX OPEN API** (지수 카테고리) |
+| K12 (업종 상대강도) | **ADR 009 별 cycle 결정 대기** (D3 부분 부정 — KRX OPEN API "지수" 카테고리 산업별지수 미발견 catch) |
 | OHLCV (한국 종목) | **Yahoo Finance 유지** (Decision 5 = OHLCV-A) — ADR 004 정합 |
 
 ### Decision 2 — KIS 우선 정합
 
 K1~K8 중 7개 KIS 직접 제공. ADR 006 의 KRX 가정 부정 후 KIS 단일이 최단경로. KIS App Key/Secret 1쌍 + access_token Redis 캐시로 7 신호 동시 활성.
 
-### Decision 3 — K12 KRX OPEN API 유지
+### Decision 3 — K12 KRX OPEN API (부분 부정, ADR 009 별 cycle)
 
-K12 sectorRet20d = "지수" 카테고리 5개 endpoint 중 산업별지수 endpoint 활용. ADR 006 §추가 결정 정합. `lib/signals/fetchers/krx/sector.ts` 박제 가능.
+**본 결정 부분 부정 (2026-05-04 흥권 추가 검증)**:
+- 흥권 KRX portal 실측 결과 "지수" 카테고리 5개 endpoint 에 산업별지수 **명시적 미발견**
+- KIS docs 도 sector/industry endpoint 박제 0건 (research-k12 §2-1)
+- → **ADR 009 별 cycle 분리** — K12-A (KIS) / K12-B (KRX krx_dd_trd 검증 후) / K12-C (KOSPI 200 단일 의미 약화) / K12-D (폐기) 4 옵션 박제
+
+**ADR 007 진행 중 K12 처리**:
+- Phase 2-A (KRX K12 sector fetcher) 보류 — ADR 009 결정 후 진입
+- Phase 2-B (KIS K1~K3, K5~K8 7 신호) 우선 진입 가능 — K12 출처 미블로커
+- Phase 4 `evaluateKorea` 의 sectorRet20d=0 더미 + K12Live=true 변질 상태 단기 유지 (ADR 009 결정 전까지)
+
+ADR 009 박제: `docs/adr/009-k12-sector-relative-strength-data-source.md` — 흥권 결정 대기.
 
 ### Decision 4 — K4 별 cycle 분리 (ADR 008)
 
@@ -138,10 +148,10 @@ lib/signals/fetchers/
 │   ├── credit.ts              — K7 daily-credit-balance
 │   └── types.ts
 │   (foreign-holding.ts — K4 fetcher 는 ADR 008 결정 후 별 cycle)
-├── krx/                       — 부분 박제 (K12 만)
-│   ├── auth.ts                — ✅ 이미 박제 (commit 1eabbe7, 재활용)
-│   ├── sector.ts              — K12 산업별지수 (지수 카테고리 endpoint 박제 후)
+├── krx/                       — 부분 박제 (K12 출처 ADR 009 결정 후만)
+│   ├── auth.ts                — ✅ 이미 박제 (commit 1eabbe7, K12-B 채택 시 재활용)
 │   └── types.ts
+│   (sector.ts — K12-B 채택 시 KRX 산업별지수 fetcher, ADR 009 결정 후)
 └── index.ts                   — 통합 export
 ```
 
@@ -153,13 +163,15 @@ lib/signals/fetchers/
 
 ADR 006 §Phase 2 → 4 순서 변경:
 
-1. **Phase 2-A (KRX K12)**: `krx/auth.ts` 재활용 + `krx/sector.ts` 박제 — 흥권 portal docs 박제 후 (지수 카테고리 endpoint 확정)
-2. **Phase 2-B (KIS K1~K3, K5~K8 7 신호)**: `kis/` 디렉토리 신설 — 흥권 KIS 키 등록 후
+1. **Phase 2-A (KRX K12) — 보류**: ADR 009 결정 후 진입. K12-B 채택 시 `krx/sector.ts` 박제, K12-A/C 채택 시 KRX sector 박제 X.
+2. **Phase 2-B (KIS K1~K3, K5~K8 7 신호) — 우선 진입 가능**: `kis/` 디렉토리 신설. K12 출처 미블로커.
 3. **Phase 3 (GHA 이전)**: ADR 006 §Phase 3 정합 유지
-4. **Phase 4 (live 활성화)**: KIS 7 신호 + KRX K12 통합, K4Live=false 단기 강제 (ADR 008 결정 전까지)
+4. **Phase 4 (live 활성화)**: KIS 7 신호 + KRX/KIS K12 (ADR 009 결정 후 통합), K4Live=false 단기 강제 (ADR 008 결정 전까지) + K12 변질 상태 (sectorRet20d=0 더미) 단기 유지 (ADR 009 결정 전까지)
 5. **Phase 5 (모니터링)**: ADR 006 §Phase 5 정합 유지
 
-**K4 fetcher (별 cycle, ADR 008 결정 후)** — Phase 진행 순서 외.
+**Phase 진행 순서 외 cycle**:
+- K4 fetcher — ADR 008 결정 후 별 cycle
+- K12 fetcher — ADR 009 결정 후 별 cycle
 
 ADR 006 §Phase 1 (인증키 발급) 정합 유지 — 흥권 KRX 등록 완료. KIS 미등록.
 
@@ -179,6 +191,7 @@ ADR 006 §Phase 1 (인증키 발급) 정합 유지 — 흥권 KRX 등록 완료.
 
 1. **KIS 키 의존도 100%** — App Key 노출 시 주문 권한 노출. ACNT_PWD 미등록 룰 + 모의투자 우선이 핵심 보호.
 2. **K4 단기 미활용** — ADR 008 결정 전까지 K4Live=false 강제 (weight 8 단기 비활성). ADR 008 Accepted 후 fetcher 박제로 활성화 가능.
+3. **K12 단기 변질 상태 유지** — ADR 009 결정 전까지 sectorRet20d=0 더미 + K12Live=true 변질 상태 단기 유지 (weight 8 의미 사실상 0). ADR 009 Accepted 후 K12-A/B/C 출처 박제로 의미 회복.
 3. **KIS rate limit 모의** — 모의 계좌 한도 명시 부재. 실측 필요 (ADR 006 §Open Q #1).
 4. **KRX OPEN API 활용 축소** — 31개 중 K12 1개 + (선택) "주식" 8개 OHLCV. 대부분 미사용. 인증키 발급 1일 대기는 K12 활성화에만 의미.
 5. **Phase 2 재진행** — ADR 006 § Phase 2 의 KRX `flow.ts` 가정 박제 X (`1eabbe7` 의 auth.ts 만 유효). 일부 사전 작업 무의미화.
@@ -190,7 +203,8 @@ ADR 006 §Phase 1 (인증키 발급) 정합 유지 — 흥권 KRX 등록 완료.
 | KIS 모의투자 시세 데이터 부정확 | 중 | 중 | Phase 2-B 직후 1회 실측 → 부정확 시 실전 키로 전환 (ADR 006 §6 정합) |
 | KIS App Key 노출 | 낮음 | 높음 | Vercel/GHA secrets + ACNT_PWD 미등록 룰 + GitHub secret scanning 활성화 |
 | K4 결정 지연 (ADR 008) | 중 | 낮음 | ADR 007 진행에 미블로커 — K4Live=false 단기 강제 |
-| KRX OPEN API K12 endpoint 미존재 | 낮음 | 낮음 | 흥권 portal 박제 후 검증 — 미존재 시 K12 도 KIS 단일 로 fallback (KIS 시장지수 endpoint 가능성 검토) |
+| K12 결정 지연 (ADR 009) | 중 | 낮음 | ADR 007 진행에 미블로커 — sectorRet20d=0 더미 단기 유지, Phase 2-A 보류 |
+| KRX OPEN API "지수" 카테고리 산업별지수 미존재 | 중 (portal 실측 명시적 미발견) | 낮음 | ADR 009 K12-A (KIS) / K12-C (KOSPI 200 단일) / K12-D (폐기) 폴백 분기 |
 
 ---
 
@@ -211,17 +225,20 @@ ADR 006 §Phase 1 의 KIS 부분 진행:
 5. `KIS_MOCK_ISSUED_AT` 박제 (만료 80일 자동 알림 트리거)
 6. ADR 007 Status `Proposed` → `Accepted` 변경 + Phase 2 트리거
 
-### Phase 2-A — KRX K12 sector fetcher (Claude 작업, 흥권 portal docs 박제 후)
+### Phase 2-A — KRX K12 sector fetcher (보류, ADR 009 결정 후)
 
-선결 조건:
+**보류 사유**: 흥권 KRX portal 실측에서 "지수" 카테고리 산업별지수 명시적 미발견 → ADR 009 cycle 진행 중. ADR 009 Decision 채택 후만 박제 가능.
+
+| ADR 009 Decision | Phase 2-A 진행 |
+|---|---|
+| K12-A (KIS) | Phase 2-A 박제 X — Phase 2-B 의 `kis/sector.ts` 로 통합 |
+| K12-B (KRX) | Phase 2-A 박제 — `krx/sector.ts` + `krx/auth.ts` 정정 |
+| K12-C (KOSPI 200 단일) | Phase 2-A 박제 X — `lib/yahoo.ts` 확장만 |
+| K12-D (폐기) | Phase 2-A 박제 X — `lib/signals/index.ts` K12: false 만 |
+
+선결 조건 (K12-B 채택 시):
 - `docs/research-krx-openapi-endpoints-2026-05-04.md` §3 screenshot 9건 path 박제
-- "지수" 카테고리 5개 endpoint 정확 명세 박제 (URL/params/schema/headers)
-
-박제 항목:
-- `lib/signals/fetchers/krx/sector.ts` — 산업별지수 closes 배열 fetcher
-- `lib/signals/fetchers/krx/types.ts` — 응답 타입
-- `lib/signals/fetchers/krx/auth.ts` 정정 — 인증 헤더 이름 + base URL 정합 검증
-- Vitest fixture (sector.test.ts)
+- "지수" 카테고리 5개 endpoint 정확 명세 + "주식" 카테고리 krx_dd_trd 응답 schema 박제
 
 ### Phase 2-B — KIS K1~K3, K5~K8 fetcher (Claude 작업, 흥권 KIS 키 등록 후)
 
@@ -247,12 +264,12 @@ async function evaluateKorea(meta: TickerMeta, onStep?: StepCallback) {
     fetchKoreaData(meta.yahooSymbol!),
     getKisAccessToken(), // Redis 캐시 우선
   ]);
-  const [flow, credit, sectorCloses] = await Promise.all([
+  const [flow, credit] = await Promise.all([
     fetchKisFlow(meta.ticker, kisToken),       // K1, K2, K3, K5, K6, K8
     fetchKisCredit(meta.ticker, kisToken),     // K7
-    fetchKrxSector(meta.sectorCode),           // K12 (KRX OPEN API)
   ]);
   // K4Live = false 단기 강제 (ADR 008 결정 전까지). ADR 008 Accepted 후 별 cycle 추가.
+  // K12 sectorRet20d = 0 단기 더미 (ADR 009 결정 전까지). ADR 009 Accepted 후 K12-A/B/C 출처별 fetcher 추가.
   // ...
 }
 ```
@@ -266,11 +283,12 @@ async function evaluateKorea(meta: TickerMeta, onStep?: StepCallback) {
 ## Open Questions
 
 1. **K4 결정** — 본 ADR 범위 외, ADR 008 cycle 에서 별도 결정.
-2. **KIS 모의 시세 정확도** — Phase 2-B 직후 1회 실측 필요. ADR 006 §Open Q #1 정합 유지.
-3. **KRX OPEN API "지수" 카테고리 5개 정확 endpoint** — 흥권 portal docs 박제 후 (research-krx-openapi-endpoints-2026-05-04.md §3 screenshot 9건 + 31개 명세).
-4. **OHLCV 대체 결정** — Decision 5 = OHLCV-A 확정 (Yahoo Finance 유지). 미래 트리거: 10/24 baseline 강결론 후 K9~K12 성능 저조 시 OHLCV-B 검토 (Decision 5 본문 박제).
-5. **KRX/KIS SaaS 재배포 라이선스** — ADR 006 §Open Q #6 정합 유지 (무료 베타 ~2026-10-24 종료 전 양쪽 직접 문의).
-6. **KIS rate limit 모의 계좌 정확 한도** — Phase 2-B 직후 실측.
+2. **K12 결정** — D3 부분 부정 후 본 ADR 범위 외, ADR 009 cycle 에서 별도 결정.
+3. **KIS 모의 시세 정확도** — Phase 2-B 직후 1회 실측 필요. ADR 006 §Open Q #1 정합 유지.
+4. **KRX OPEN API "지수" 카테고리 5개 정확 endpoint** — 흥권 portal docs 박제 후 (research-krx-openapi-endpoints-2026-05-04.md §3 screenshot 9건 + 31개 명세). ADR 009 K12-B 검증 핵심.
+5. **OHLCV 대체 결정** — Decision 5 = OHLCV-A 확정 (Yahoo Finance 유지). 미래 트리거: 10/24 baseline 강결론 후 K9~K12 성능 저조 시 OHLCV-B 검토 (Decision 5 본문 박제).
+6. **KRX/KIS SaaS 재배포 라이선스** — ADR 006 §Open Q #6 정합 유지 (무료 베타 ~2026-10-24 종료 전 양쪽 직접 문의).
+7. **KIS rate limit 모의 계좌 정확 한도** — Phase 2-B 직후 실측.
 
 ---
 
@@ -278,8 +296,9 @@ async function evaluateKorea(meta: TickerMeta, onStep?: StepCallback) {
 
 - [x] 흥권 본 ADR Decision 5 (OHLCV) 답변 — 2026-05-04 OHLCV-A 채택
 - [ ] ADR 008 (K4) 별 cycle 진행 박제
+- [ ] ADR 009 (K12) 별 cycle 진행 박제 — D3 부분 부정 supersede
 - [ ] PR 본문에 "supersedes ADR 006 §Decision §1, §2 partial" 인용
-- [ ] ADR 006 본문에 cross-reference 추가 (`Status: Accepted (2026-05-04, partial supersede by ADR 007 + ADR 008)`)
+- [ ] ADR 006 본문에 cross-reference 추가 (`Status: Accepted (2026-05-04, partial supersede by ADR 007 + ADR 008 + ADR 009)`)
 - [ ] research-krx-openapi-endpoints-2026-05-04.md 의 §3 screenshot path + §2 31개 endpoint 명세 박제
 - [x] 흥권 ADR 007 Status `Proposed` → `Accepted` 전환 — 2026-05-04 완료
 
@@ -289,6 +308,7 @@ async function evaluateKorea(meta: TickerMeta, onStep?: StepCallback) {
 
 - ADR 006 — 본 ADR 가 §Decision §1, §2 부분 supersede. 다른 결정 (§3, §5, §6, §7) 유지.
 - **ADR 008 — K4 (외국인 보유율 Δ) 데이터 출처 결정. 본 ADR 의 K4 분기를 별 cycle 로 분리.**
+- **ADR 009 — K12 (업종 상대강도) 데이터 출처 결정. 본 ADR §D3 부분 부정 + supersede.**
 - ADR 003 — 신호 평가 엔진 v3 (`live` flag 정책)
 - ADR 004 — 시장별 데이터 소스 (한국 시장 부분 ADR 006 + ADR 007 가 차례로 보완)
 - ADR 005 — Stage 2 actual scope
@@ -307,4 +327,4 @@ async function evaluateKorea(meta: TickerMeta, onStep?: StepCallback) {
 
 ---
 
-*Status: Accepted (2026-05-04). Decision 1~8 박제 완료. Phase 2-A/2-B 공식 진입 트리거. K4 (Phase 2-C) 는 ADR 008 별 cycle.*
+*Status: Accepted (2026-05-04). Decision 1~8 박제 완료. **Phase 2-A 보류 (ADR 009 결정 후), Phase 2-B 공식 진입 트리거.** K4 fetcher 는 ADR 008 별 cycle. K12 fetcher 는 ADR 009 별 cycle (D3 부분 부정).*
