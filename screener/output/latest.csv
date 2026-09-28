@@ -1,0 +1,22 @@
+﻿rank,name,category,mcap,fdv,pf_basis,rev_30d,rev_annual,fees_30d,trend,pf,holders_rev_30d,category_pf_rank,symbol,chains,children,defillama_url
+1,nest,Dexs,5057297,,mcap,546927,6563124,546927,3.132,0.77,546927,1/4,NEST,Hyperliquid L1,nest CL,https://defillama.com/protocol/nest
+2,ORE Protocol,Gamified Mining,44521833,,mcap,2364342,28372104,2364342,1.222,1.57,2340694,1/1,ORE,Solana,ORE Protocol,https://defillama.com/protocol/ore-protocol
+3,Solv Protocol,Bridge,23805831,,mcap,1218333,14619996,2436409,1.804,1.63,0,1/1,SOLV,AILayer;Arbitrum;Avalanche;BOB;BSC;Base;Berachain;Binance;Bitcoin;CORE;Ethereum;Hyperliquid L1;Ink;Linea;Mantle;Merlin;Polygon;Scroll;Solana;Soneium;X Layer,SolvBTC,https://defillama.com/protocol/solv-protocol
+4,Gains Network,Derivatives,12048342,,mcap,577101,6925212,758059,1.098,1.74,33525,1/2,GNS,ApeChain;Arbitrum;Base;MegaETH;Polygon,Gains Network,https://defillama.com/protocol/gains-network
+5,Securitize,RWA,64252630,,mcap,2648724,31784688,11869909,1.453,2.02,0,1/3,-,Aptos;Arbitrum;Avalanche;BSC;Ethereum;Ink;Mantle;OP Mainnet;Plume Mainnet;Polygon;Sei;Solana;ZKsync Era,BlackRock BUIDL;Apollo Diversified Credit Securitize Fund;VanEck Treasury Fund;Blockchain Capital;Hamilton Lane Senior Credit Opportunities Securitize Fund;Mantle Index Four Fund;Securitize Tokenized AAA CLO Fund,https://defillama.com/protocol/securitize
+6,HyperLend,Lending,5454576,,mcap,196075,2352896,1228180,1.255,2.32,0,1/2,HPL,Hyperliquid L1,HyperLend Pooled;HyperLend Isolated,https://defillama.com/protocol/hyperlend
+7,o1.exchange,Launchpad,85557258,,mcap,2867325,34407900,5238321,3.612,2.49,0,1/2,O,Arc;BSC;Base;Ethereum;Hyperliquid L1;Monad;Robinhood Chain;Solana;X Layer,o1.exchange Trading Terminal;o1 Launchpad,https://defillama.com/protocol/o1-exchange
+8,HumidiFi,Dexs,16203696,,mcap,381629,4579548,381629,1.389,3.54,0,2/4,WET,Solana,HumidiFi,https://defillama.com/protocol/humidifi
+9,Definitive,DEX Aggregator,33730241,,mcap,749038,8988456,749038,1.294,3.75,149809,1/1,EDGE,Arbitrum;Arc;Avalanche;BSC;Base;Ethereum;Ink;OP Mainnet;Polygon;Robinhood Chain;Solana,Definitive,https://defillama.com/protocol/definitive
+10,Lista DAO,CDP,38438259,,mcap,478795,5745544,1385411,1.607,6.69,31735,1/1,LISTA,BSC;Binance;Ethereum,Lista CDP;Lista Liquid Staking;Lista Lending;Lista RWA;Lista DEX;lisAster;Lista Pre-IPO,https://defillama.com/protocol/lista-dao
+11,Alchemix,Synthetics,6818927,,mcap,68640,823680,150260,8.822,8.28,0,1/1,ALCX,Arbitrum;Ethereum;Fantom;OP Mainnet;Optimism,Alchemix V2;Alchemix V3,https://defillama.com/protocol/alchemix
+12,Venus,Lending,58815129,,mcap,477424,5729090,1237752,1.733,10.27,190276,2/2,XVS,Arbitrum;BSC;Base;Binance;Ethereum;OP Mainnet;Op_Bnb;Optimism;Unichain;ZKsync Era;opBNB;zkSync Era,Venus Core Pool;Venus Flux,https://defillama.com/protocol/venus-finance
+13,Minswap,Dexs,6739231,,mcap,52696,632352,135531,1.106,10.66,24952,3/4,MIN,Cardano,Minswap DEX;Minswap Aggregator,https://defillama.com/protocol/minswap
+14,Overtime,Prediction Market,11574070,,mcap,83098,997176,83098,1.73,11.61,83098,1/1,OVER,Arbitrum;Base;Binance;Ethereum;OP Mainnet;Optimism;Polygon,Overtime,https://defillama.com/protocol/overtime
+15,Centrifuge,RWA,63586927,,mcap,433081,5196972,4563322,1.103,12.24,0,2/3,CFG,Avalanche;Base;Ethereum;Monad;Pharos;Plume Mainnet,Centrifuge Protocol,https://defillama.com/protocol/centrifuge
+16,SSV Network,Staking Pool,47733811,,mcap,296379,3556548,301164,1.301,13.42,296379,1/1,SSV,Ethereum,SSV Network,https://defillama.com/protocol/ssv-network
+17,Aquarius Stellar,Dexs,16012964,,mcap,82546,990552,126943,1.52,16.17,82546,4/4,AQUA,Stellar,Aquarius Stellar,https://defillama.com/protocol/aquarius-stellar
+18,ApeX Protocol,Derivatives,41661639,,mcap,214608,2575296,429211,1.377,16.18,214608,2/2,APEX,Arbitrum;Base;Binance;Ethereum;Mantle,Apex Omni,https://defillama.com/protocol/apex-protocol
+19,Sanctum,Liquid Staking,47900286,,mcap,241699,2900389,7758727,1.049,16.52,0,1/1,CLOUD,Solana,Sanctum Reserve;Sanctum Infinity;Sanctum Validator LSTs,https://defillama.com/protocol/sanctum
+20,Metaplex,Launchpad,26549261,,mcap,109572,1314864,109572,1.093,20.19,54786,2/2,MPLX,Solana,Metaplex,https://defillama.com/protocol/metaplex
+21,USD AI,RWA,93711082,,mcap,168717,2024604,1687168,1.427,46.29,0,3/3,CHIP,Arbitrum,USD AI,https://defillama.com/protocol/usd-ai
