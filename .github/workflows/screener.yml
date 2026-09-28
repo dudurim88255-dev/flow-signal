@@ -26,6 +26,7 @@ jobs:
       - name: Run screener
         env:
           TZ: Asia/Seoul
+          COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }} # 선택: 없으면 무키 무료 호출
         run: python screener/screener.py
 
       - name: Commit results
