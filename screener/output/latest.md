@@ -1,6 +1,6 @@
-# 소형 코인 스크리너 — 2026-09-28
+# 소형 코인 스크리너 — 2026-10-05
 
-생성: 2026-09-28 12:01 KST · 출처: DefiLlama 무료 API (`/overview/fees`, `/protocols`, `/lite/protocols2`, `/summary/fees/{slug}`) + CoinGecko 무료 API (`/coins/markets`) — CoinGecko 603/707개 조회
+생성: 2026-10-05 09:21 KST · 출처: DefiLlama 무료 API (`/overview/fees`, `/protocols`, `/lite/protocols2`, `/summary/fees/{slug}`) + CoinGecko 무료 API (`/coins/markets`) — CoinGecko 0/730개 조회 (배치 3개 실패)
 
 필터: mcap $5M~$100M · rev_30d ≥ $50,000 · trend ≥ 1.0 · 토큰 보유
 
@@ -9,50 +9,57 @@
 - trend = 최근 완결 3개월 월평균 ÷ 그 전 3개월 월평균 (진행 중인 달 제외)
 - mcap·FDV = CoinGecko 값 우선 (없으면 DefiLlama mcap) · 유통비율 = mcap ÷ FDV · pf_mcap = mcap ÷ rev_annual
 - 플래그: `mcap불일치` DefiLlama·CoinGecko mcap 차이 >30% (토큰 매핑 오류 의심) · `유통<25%` 향후 언락 희석 위험 · `pf<1 데이터확인` 매출 과대집계 의심
-- FDV 기준 행: 21/21
+- FDV 기준 행: 0/28
 
-## 결과 (21개, pf 오름차순)
+## 결과 (28개, pf 오름차순)
 
 | # | 이름 | 분야 | mcap | FDV | 유통비율 | rev_30d | trend | pf (기준) | pf_mcap | holders_rev_30d | 분야 내 pf 순위 | 플래그 | 링크 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | ORE Protocol | Gamified Mining | $44.57M | $44.57M | 100% | $2.45M | 1.22 | 1.5x (FDV) | 1.5x | $2.43M | 1/1 | - | [DefiLlama](https://defillama.com/protocol/ore-protocol) |
-| 2 | Gains Network | Derivatives | $11.85M | $11.85M | 100% | $587.93K | 1.10 | 1.7x (FDV) | 1.7x | $35.91K | 1/2 | - | [DefiLlama](https://defillama.com/protocol/gains-network) |
-| 3 | Solv Protocol | Bridge | $24.04M | $42.03M | 57% | $1.22M | 1.80 | 2.9x (FDV) | 1.6x | - | 1/1 | - | [DefiLlama](https://defillama.com/protocol/solv-protocol) |
-| 4 | nest | Dexs | $5.00M | $36.47M | 14% | $546.93K | 3.13 | 5.6x (FDV) | 0.8x | $546.93K | 1/4 | 유통<25% | [DefiLlama](https://defillama.com/protocol/nest) |
-| 5 | HyperLend | Lending | $5.30M | $13.45M | 39% | $195.98K | 1.25 | 5.7x (FDV) | 2.3x | - | 1/2 | - | [DefiLlama](https://defillama.com/protocol/hyperlend) |
-| 6 | Alchemix | Synthetics | $6.82M | $8.64M | 79% | $68.65K | 8.82 | 10.5x (FDV) | 8.3x | - | 1/1 | - | [DefiLlama](https://defillama.com/protocol/alchemix) |
-| 7 | Overtime | Prediction Market | $11.44M | $11.44M | 100% | $83.52K | 1.73 | 11.4x (FDV) | 11.4x | $83.52K | 1/1 | - | [DefiLlama](https://defillama.com/protocol/overtime) |
-| 8 | Lista DAO | CDP | $37.70M | $69.75M | 54% | $478.81K | 1.61 | 12.1x (FDV) | 6.6x | $31.73K | 1/1 | - | [DefiLlama](https://defillama.com/protocol/lista-dao) |
-| 9 | Securitize | RWA | $64.25M | $413.02M | 16% | $2.72M | 1.45 | 12.7x (FDV) | 2.0x | - | 1/3 | 유통<25% | [DefiLlama](https://defillama.com/protocol/securitize) |
-| 10 | SSV Network | Staking Pool | $46.13M | $46.13M | 100% | $297.43K | 1.30 | 12.9x (FDV) | 12.9x | $297.43K | 1/1 | - | [DefiLlama](https://defillama.com/protocol/ssv-network) |
-| 11 | Definitive | DEX Aggregator | $31.45M | $117.10M | 27% | $749.04K | 1.29 | 13.0x (FDV) | 3.5x | $149.81K | 1/1 | - | [DefiLlama](https://defillama.com/protocol/definitive) |
-| 12 | HumidiFi | Dexs | $15.64M | $68.00M | 23% | $380.63K | 1.39 | 14.9x (FDV) | 3.4x | - | 2/4 | 유통<25% | [DefiLlama](https://defillama.com/protocol/humidifi) |
-| 13 | Minswap | Dexs | $6.68M | $9.56M | 70% | $52.88K | 1.11 | 15.1x (FDV) | 10.5x | $25.08K | 3/4 | - | [DefiLlama](https://defillama.com/protocol/minswap) |
-| 14 | o1.exchange | Launchpad | $84.22M | $526.40M | 16% | $2.87M | 3.61 | 15.3x (FDV) | 2.4x | - | 1/2 | 유통<25% | [DefiLlama](https://defillama.com/protocol/o1-exchange) |
-| 15 | Venus | Lending | $57.18M | $100.85M | 57% | $477.42K | 1.73 | 17.6x (FDV) | 10.0x | $190.28K | 2/2 | - | [DefiLlama](https://defillama.com/protocol/venus-finance) |
-| 16 | Centrifuge | RWA | $61.94M | $110.74M | 56% | $433.08K | 1.10 | 21.3x (FDV) | 11.9x | - | 2/3 | - | [DefiLlama](https://defillama.com/protocol/centrifuge) |
-| 17 | Sanctum | Liquid Staking | $44.67M | $85.98M | 52% | $241.70K | 1.05 | 29.6x (FDV) | 15.4x | - | 1/1 | - | [DefiLlama](https://defillama.com/protocol/sanctum) |
-| 18 | Aquarius Stellar | Dexs | $16.00M | $36.35M | 44% | $82.55K | 1.52 | 36.7x (FDV) | 16.1x | $82.55K | 4/4 | - | [DefiLlama](https://defillama.com/protocol/aquarius-stellar) |
-| 19 | Metaplex | Launchpad | $26.02M | $55.19M | 47% | $109.71K | 1.09 | 41.9x (FDV) | 19.8x | $54.86K | 2/2 | - | [DefiLlama](https://defillama.com/protocol/metaplex) |
-| 20 | ApeX Protocol | Derivatives | $40.49M | $130.53M | 31% | $217.71K | 1.38 | 50.0x (FDV) | 15.5x | $217.71K | 2/2 | - | [DefiLlama](https://defillama.com/protocol/apex-protocol) |
-| 21 | USD AI | RWA | $90.78M | $453.91M | 20% | $168.72K | 1.43 | 224.2x (FDV) | 44.8x | - | 3/3 | 유통<25% | [DefiLlama](https://defillama.com/protocol/usd-ai) |
+| 1 | Graphite Protocol | Launchpad | $26.50M | - | - | $3.71M | 8.77 | 0.6x (mcap) | 0.6x | - | 1/3 | pf<1 데이터확인 | [DefiLlama](https://defillama.com/protocol/graphite-protocol) |
+| 2 | Gains Network | Derivatives | $10.14M | - | - | $655.54K | 1.47 | 1.3x (mcap) | 1.3x | $42.09K | 1/2 | - | [DefiLlama](https://defillama.com/protocol/gains-network) |
+| 3 | Securitize | RWA | $52.30M | - | - | $2.72M | 1.14 | 1.6x (mcap) | 1.6x | - | 1/2 | - | [DefiLlama](https://defillama.com/protocol/securitize) |
+| 4 | Solv Protocol | Bridge | $24.39M | - | - | $1.24M | 1.28 | 1.6x (mcap) | 1.6x | - | 1/1 | - | [DefiLlama](https://defillama.com/protocol/solv-protocol) |
+| 5 | ORE Protocol | Gamified Mining | $66.04M | - | - | $2.59M | 1.02 | 2.1x (mcap) | 2.1x | $2.56M | 1/1 | - | [DefiLlama](https://defillama.com/protocol/ore-protocol) |
+| 6 | Inverse Finance | CDP | $7.39M | - | - | $267.41K | 1.17 | 2.3x (mcap) | 2.3x | $5.48K | 1/2 | - | [DefiLlama](https://defillama.com/protocol/inverse-finance) |
+| 7 | fx Protocol | Dual-Token Stablecoin | $5.71M | - | - | $206.36K | 2.08 | 2.3x (mcap) | 2.3x | - | 1/1 | - | [DefiLlama](https://defillama.com/protocol/fx-protocol) |
+| 8 | Marinade | Staking Pool | $13.26M | - | - | $421.26K | 1.28 | 2.6x (mcap) | 2.6x | $210.63K | 1/2 | - | [DefiLlama](https://defillama.com/protocol/marinade-finance) |
+| 9 | HumidiFi | Dexs | $15.35M | - | - | $381.82K | ∞ | 3.3x (mcap) | 3.3x | - | 1/4 | - | [DefiLlama](https://defillama.com/protocol/humidifi) |
+| 10 | o1.exchange | Launchpad | $81.77M | - | - | $1.72M | 9.70 | 4.0x (mcap) | 4.0x | - | 2/3 | - | [DefiLlama](https://defillama.com/protocol/o1-exchange) |
+| 11 | Beefy | Yield Aggregator | $5.85M | - | - | $119.73K | 1.06 | 4.1x (mcap) | 4.1x | $43.10K | 1/1 | - | [DefiLlama](https://defillama.com/protocol/beefy) |
+| 12 | Definitive | DEX Aggregator | $34.92M | - | - | $693.95K | 2.15 | 4.2x (mcap) | 4.2x | $138.79K | 1/2 | - | [DefiLlama](https://defillama.com/protocol/definitive) |
+| 13 | Stargate Finance | Cross Chain Bridge | $20.57M | - | - | $277.56K | 1.63 | 6.2x (mcap) | 6.2x | - | 1/1 | - | [DefiLlama](https://defillama.com/protocol/stargate-finance) |
+| 14 | Venus | Lending | $57.99M | - | - | $772.97K | 1.66 | 6.3x (mcap) | 6.3x | $308.53K | 1/2 | - | [DefiLlama](https://defillama.com/protocol/venus-finance) |
+| 15 | Lista DAO | CDP | $36.68M | - | - | $474.71K | 2.17 | 6.4x (mcap) | 6.4x | $33.77K | 2/2 | - | [DefiLlama](https://defillama.com/protocol/lista-dao) |
+| 16 | Spark | Lending | $84.86M | - | - | $1.04M | ∞ | 6.8x (mcap) | 6.8x | $805.44K | 2/2 | - | [DefiLlama](https://defillama.com/protocol/spark) |
+| 17 | Chainflip | Dexs | $26.72M | - | - | $311.92K | 1.09 | 7.1x (mcap) | 7.1x | $311.92K | 2/4 | - | [DefiLlama](https://defillama.com/protocol/chainflip) |
+| 18 | Alchemix | Synthetics | $6.92M | - | - | $55.27K | 7.01 | 10.4x (mcap) | 10.4x | - | 1/1 | - | [DefiLlama](https://defillama.com/protocol/alchemix) |
+| 19 | Rhea Finance | Dexs | $29.70M | - | - | $218.57K | 1.32 | 11.3x (mcap) | 11.3x | - | 3/4 | - | [DefiLlama](https://defillama.com/protocol/rhea-finance) |
+| 20 | stake.link | Liquid Staking | $12.94M | - | - | $91.98K | 1.04 | 11.7x (mcap) | 11.7x | $55.06K | 1/2 | - | [DefiLlama](https://defillama.com/protocol/stake.link) |
+| 21 | Centrifuge | RWA | $58.00M | - | - | $401.06K | 1.06 | 12.1x (mcap) | 12.1x | - | 2/2 | - | [DefiLlama](https://defillama.com/protocol/centrifuge) |
+| 22 | SSV Network | Staking Pool | $46.13M | - | - | $306.95K | 2.31 | 12.5x (mcap) | 12.5x | $306.95K | 2/2 | - | [DefiLlama](https://defillama.com/protocol/ssv-network) |
+| 23 | Cetus | Dexs | $27.20M | - | - | $170.34K | 1.11 | 13.3x (mcap) | 13.3x | - | 4/4 | - | [DefiLlama](https://defillama.com/protocol/cetus) |
+| 24 | ApeX Protocol | Derivatives | $36.78M | - | - | $194.55K | 1.17 | 15.8x (mcap) | 15.8x | $194.55K | 2/2 | - | [DefiLlama](https://defillama.com/protocol/apex-protocol) |
+| 25 | Kinetiq | Liquid Staking | $87.92M | - | - | $405.32K | 1.34 | 18.1x (mcap) | 18.1x | $145.98K | 2/2 | - | [DefiLlama](https://defillama.com/protocol/kinetiq) |
+| 26 | Sushi | DEX Aggregator | $72.86M | - | - | $268.51K | 1.11 | 22.6x (mcap) | 22.6x | $6.47K | 2/2 | - | [DefiLlama](https://defillama.com/protocol/sushi) |
+| 27 | Lombard | Restaked BTC | $49.55M | - | - | $158.37K | 1.63 | 26.1x (mcap) | 26.1x | - | 1/1 | - | [DefiLlama](https://defillama.com/protocol/lombard-finance) |
+| 28 | Metaplex | Launchpad | $28.92M | - | - | $66.29K | 1.04 | 36.4x (mcap) | 36.4x | $33.15K | 3/3 | - | [DefiLlama](https://defillama.com/protocol/metaplex) |
 
 ## 필터 단계별 탈락
 
 | 단계 | 개수 |
 |---|---|
-| 대상 (매출 보고 프로토콜, 부모 단위 합산) | 1860 |
-| 토큰 없음 | 1020 |
-| mcap 5M~100M 범위 밖 (mcap 미상 포함) | 654 |
-| rev_30d < $50,000 | 115 |
-| trend 계산 불가 (완결 월 6개 미만/데이터 없음) | 7 |
-| trend < 1.0 | 43 |
-| 최종 통과 | 21 |
+| 대상 (매출 보고 프로토콜, 부모 단위 합산) | 1898 |
+| 토큰 없음 | 1032 |
+| mcap 5M~100M 범위 밖 (mcap 미상 포함) | 677 |
+| rev_30d < $50,000 | 122 |
+| trend 계산 불가 (완결 월 6개 미만/데이터 없음) | 8 |
+| trend < 1.0 | 31 |
+| 최종 통과 | 28 |
 
 ## 검증 행: Infinex (필터 무관)
 
 | # | 이름 | 분야 | mcap | FDV | 유통비율 | rev_30d | trend | pf (기준) | pf_mcap | holders_rev_30d | 분야 내 pf 순위 | 플래그 | 링크 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| - | Infinex | Interface | $14.10M | $70.72M | 20% | $50.44K | 0.43 | 116.8x (FDV) | 23.3x | - | - | 유통<25% | [DefiLlama](https://defillama.com/protocol/infinex) |
+| - | Infinex | Interface | $11.87M | - | - | $52.09K | 0.48 | 19.0x (mcap) | 19.0x | - | - | - | [DefiLlama](https://defillama.com/protocol/infinex) |
 
-- 사용한 완결 월: 2026-03, 2026-04, 2026-05, 2026-06, 2026-07, 2026-08 · 합산 자식: Infinex Perp, Infinex Spot
+- 사용한 완결 월: 2026-04, 2026-05, 2026-06, 2026-07, 2026-08, 2026-09 · 합산 자식: Infinex Perp, Infinex Spot
